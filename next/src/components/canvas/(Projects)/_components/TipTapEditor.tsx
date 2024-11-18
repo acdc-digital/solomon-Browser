@@ -71,7 +71,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   return (
     <div>
       {/* Initial Heading */}
-      <div className="flex flex-row gap-x-4 rounded border-b bg-gray-50 p-2 pl-4 py-1 justify-end">
+      <div className="flex flex-row gap-x-4 border-b bg-gray-50 p-2 pl-4 py-1 justify-end">
         <Button className="text-gray-600" variant="outline">
           <BoltIcon className="mr-2 h-4 w-4" />
           Editor

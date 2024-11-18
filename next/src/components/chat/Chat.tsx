@@ -20,7 +20,7 @@ export default function Chat() {
   return (
     <div className="flex flex-col">
       {/* Adjusted margins to remove space above */}
-      <div className="bg-gray-100 rounded-xl h-[650px] border border-gray-400 overflow-y-auto mt-0 mb-4 mx-4">
+      <div className="bg-gray-100 rounded-xl h-[650px] border border-gray-400 overflow-y-auto mt-2 mb-4">
         {entries?.map((entry) => {
           return (
             <div key={entry._id} className="flex flex-col gap-2 text-black p-2">
@@ -36,7 +36,7 @@ export default function Chat() {
 
       {/* Adjusted margins to remove space above */}
       <form
-        className="flex mt-0 mb-4 mx-4"
+        className="flex mt-0 mb-4 mx-2"
         onSubmit={(e) => {
           e.preventDefault();
           if (message.trim() === '') return; // Prevent empty messages
