@@ -37,7 +37,7 @@ export const insertEntry = mutation({
         response: v.string(),
     },
     handler: async (ctx, args) => {
-        await ctx.db.insert("entries", {
+        await ctx.db.insert("chat", {
             input: args.input,
             response: args.response,
         });
@@ -46,7 +46,7 @@ export const insertEntry = mutation({
 
 export const getAllEntries = query({
     handler: async (ctx) => {
-        const entries = await ctx.db.query("entries").collect();
+        const entries = await ctx.db.query("chat").collect();
         return entries;
     },
 });

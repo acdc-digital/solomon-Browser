@@ -16,7 +16,7 @@ import StarterKit from '@tiptap/starter-kit';
 
 import useChatStore from '@/lib/store/chatStore';
 import React from 'react';
-import { useMutation } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../../../convex/_generated/api';
 import { title } from 'process';
 
@@ -30,7 +30,8 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   onChange,
   initialContent,
 }) => {
-  
+
+  const documents = useQuery(api.documents.getDocuments)
   const createDocument = useMutation(api.documents.createDocument);
 
   const editor = useEditor({
@@ -69,8 +70,35 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
 
   return (
     <div>
-      {/* Mini Nav */}
-      <div className="flex flex-row gap-x-4 rounded border-b bg-gray-50 p-2 pl-4 py-1 items-center">
+      {/* Initial Heading */}
+      <div className="flex flex-row gap-x-4 rounded border-b bg-gray-50 p-2 pl-4 py-1 justify-end">
+        <Button className="text-gray-600" variant="outline">
+          <BoltIcon className="mr-2 h-4 w-4" />
+          Editor
+        </Button>
+        <Button
+          onClick={() => {
+            createDocument({ title: "this is a test" });
+          }}
+          className="text-gray-600"
+          variant="outline"
+        >
+          <FolderIcon className="mr-2 h-4 w-4" />
+          Files
+        </Button>
+        <Button
+          className="text-gray-600"
+          variant="outline"
+          onClick={() => activateChat()}
+        >
+          <BotIcon className="mr-2 h-5 w-5" />
+          Chat
+        </Button>
+      </div>
+
+
+      {/* Editor Nav */}
+      <div className="flex flex-row gap-x-4 border-b bg-white p-2 pl-4 py-0.5 items-center">
         
         <button
         onClick={() => editor.chain().focus().toggleBold().run()}
@@ -246,38 +274,11 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
         >
           redo
         </button> */}
-        <div className='flex justify-end gap-x-2 w-full mr-4'>
-        <Button
-            className='text-gray-600'
-            variant="outline"
-            >
-            <BoltIcon className="mr-2 h-4 w-4" />  
-            Editor
-          </Button>
-
-          <Button
-            onClick={() => { createDocument({ title: "this is a test" }) }}
-            className='text-gray-600'
-            variant="outline"
-            >
-            <FolderIcon className="mr-2 h-4 w-4" />  
-            Files
-          </Button>
-
-          <Button
-          className='text-gray-600'
-          variant="outline"
-          onClick={() => activateChat()} 
-          >
-          <BotIcon className="mr-2 h-5 w-5" />
-          Chat
-        </Button>
-        </div>
       </div>
 
       <div 
         className='m-2'
-        style={{ height: 'calc(83vh - 83px)', overflowY: 'auto', overflowX: 'hidden' }}>
+        style={{ height: 'calc(80vh - 80px)', overflowY: 'auto', overflowX: 'hidden' }}>
         <EditorContent
           className='mt-2'
           editor={editor} />

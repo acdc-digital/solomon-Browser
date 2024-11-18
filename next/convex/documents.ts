@@ -1,10 +1,16 @@
-import { mutation } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+
+export const getDocuments = query({
+    async handler(ctx) {
+        return await ctx.db.query('documents').collect()
+    },
+})
 
 export const createDocument = mutation({
     args: {
         title: v.string(),
-        projectId: v.optional(v.id("projects")),
+        parentProject: v.optional(v.id("projects")),
     },
     async handler(ctx, args) {
         // Retrieve the authenticated user's identity
@@ -13,11 +19,11 @@ export const createDocument = mutation({
             throw new Error("User not authenticated.");
         }
 
-        // Validate if projectId exists
-        if (args.projectId) {
-            const project = await ctx.db.get(args.projectId);
+        // Validate if parentProject exists
+        if (args.parentProject) {
+            const project = await ctx.db.get(args.parentProject);
             if (!project) {
-                throw new Error("Associated project not found.");
+                throw new Error("Associated parent project not found.");
             }
         }
 
@@ -25,7 +31,7 @@ export const createDocument = mutation({
         await ctx.db.insert('documents', {
             title: args.title,
             userId: identity.subject, // Use the authenticated user's ID
-            projectId: args.projectId, // Include the optional projectId
+            parentProject: args.parentProject, // Include the optional parentProject
         });
     },
 });

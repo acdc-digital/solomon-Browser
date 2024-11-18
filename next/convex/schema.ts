@@ -20,7 +20,7 @@ export default defineSchema({
   .index("by_user_parent", ["userId", "parentProject"]),
   
   // Schema for Chat
-  entries: defineTable({
+  chat: defineTable({
     input: v.string(),
     response: v.string(),
   }),
@@ -30,8 +30,8 @@ export default defineSchema({
     title: v.string(),
     content: v.optional(v.string()), // Optional content for the document
     userId: v.string(), // The user who created the document
-    projectId: v.optional(v.id("projects")), // Optional link to a project
+    parentProject: v.optional(v.id("projects")), // Link to the parent project
   })
   .index("by_user", ["userId"]) // Index for querying documents by user
-  .index("by_project", ["projectId"]) // Index for querying documents by project
+  .index("by_user_parent", ["userId", "parentProject"]), // Index for querying documents by parent project
 });
