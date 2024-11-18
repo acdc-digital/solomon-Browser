@@ -23,5 +23,15 @@ export default defineSchema({
   entries: defineTable({
     input: v.string(),
     response: v.string(),
+  }),
+
+  // Schema for Documents
+  documents: defineTable({
+    title: v.string(),
+    content: v.optional(v.string()), // Optional content for the document
+    userId: v.string(), // The user who created the document
+    projectId: v.optional(v.id("projects")), // Optional link to a project
   })
+  .index("by_user", ["userId"]) // Index for querying documents by user
+  .index("by_project", ["projectId"]) // Index for querying documents by project
 });

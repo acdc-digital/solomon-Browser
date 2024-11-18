@@ -16,6 +16,9 @@ import StarterKit from '@tiptap/starter-kit';
 
 import useChatStore from '@/lib/store/chatStore';
 import React from 'react';
+import { useMutation } from 'convex/react';
+import { api } from '../../../../../convex/_generated/api';
+import { title } from 'process';
 
 
 interface TipTapEditorProps {
@@ -27,6 +30,9 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   onChange,
   initialContent,
 }) => {
+  
+  const createDocument = useMutation(api.documents.createDocument);
+
   const editor = useEditor({
     extensions: [
       // TextStyle.configure({ types: [ListItem.name] }),
@@ -250,6 +256,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
           </Button>
 
           <Button
+            onClick={() => { createDocument({ title: "this is a test" }) }}
             className='text-gray-600'
             variant="outline"
             >
