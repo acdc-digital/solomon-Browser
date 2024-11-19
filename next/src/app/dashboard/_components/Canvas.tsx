@@ -28,7 +28,6 @@ interface CanvasProps {
             case 'Admin': return <Admin />;
             case 'Files': return <Files />;
             case 'Projects': return <Projects projectId={activeProjectId}/>;
-            case 'Tasks': return <Tasks />;
             case 'Docs': return <Docs />;
             default: return <Admin />; // Default case
         }

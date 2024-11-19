@@ -2,7 +2,7 @@
 // /Users/matthewsimon/Documents/github/solomon-electron/solomon-electron/next/src/components/canvas/(Projects)/_components/TipTapEditor.tsx
 
 import { useEditorStore } from "@/lib/store/editorStore";
-import { AlignHorizontalDistributeCenterIcon, BoldIcon, BoltIcon, BotIcon, BotMessageSquareIcon, CodeIcon, CogIcon, FolderIcon, Heading1Icon, Heading2Icon, Heading3Icon, ItalicIcon, ListIcon, ListOrderedIcon, PilcrowIcon, SplitIcon, Strikethrough, TextQuoteIcon } from 'lucide-react';
+import { AlignHorizontalDistributeCenterIcon, BoldIcon, BoltIcon, BotIcon, BotMessageSquareIcon, CodeIcon, CogIcon, FolderIcon, Heading1Icon, Heading2Icon, Heading3Icon, ItalicIcon, ListIcon, ListOrderedIcon, PilcrowIcon, SplitIcon, Strikethrough, SquareCheck, TextQuoteIcon } from 'lucide-react';
 import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import { Button } from '@/components/ui/button';
 import { FileTable } from "./FileTable";
@@ -34,8 +34,6 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
 }) => {
 
   const { activeView, setActiveView } = useEditorStore();
-  // const documents = useQuery(api.documents.getDocuments)
-  // const createDocument = useMutation(api.documents.createDocument);
 
   const files = [
     { filename: "File1.docx", type: "Document", dateAdded: "2023-11-14" },
@@ -96,6 +94,13 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
                 onClick={() => setActiveView("files")} >
               <FolderIcon className="mr-2 h-4 w-4" />
             Files
+        </Button>
+        <Button
+          className="text-gray-600"
+          variant="outline"
+          >
+          <SquareCheck className="mr-2 h-5 w-5" />
+          Tasks
         </Button>
         <Button
           className="text-gray-600"

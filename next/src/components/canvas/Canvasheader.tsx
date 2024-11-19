@@ -42,12 +42,6 @@ const CanvasHeader: React.FC<CanvasHeaderProps & {
 					Projects
 				</Button>
 
-				<Button 
-					className='mr-2'
-					variant={"outline"} 
-					onClick={onTasksClick}>
-					Tasks
-				</Button>
 			</div>
 				{/* Push the Docs button to the right */}
 				<div className='ml-auto mr-2'> 
