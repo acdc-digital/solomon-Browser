@@ -1,23 +1,25 @@
 // TipTap Editor 
 // /Users/matthewsimon/Documents/github/solomon-electron/solomon-electron/next/src/components/canvas/(Projects)/_components/TipTapEditor.tsx
 
+import React from 'react';
 import { useEditorStore } from "@/lib/store/editorStore";
-import { AlignHorizontalDistributeCenterIcon, BoldIcon, BoltIcon, BotIcon, BotMessageSquareIcon, CodeIcon, CogIcon, FolderIcon, Heading1Icon, Heading2Icon, Heading3Icon, ItalicIcon, ListIcon, ListOrderedIcon, PilcrowIcon, SplitIcon, Strikethrough, SquareCheck, TextQuoteIcon } from 'lucide-react';
+import { AlignHorizontalDistributeCenterIcon, BoldIcon, BoltIcon, BotIcon, BotMessageSquareIcon, CodeIcon, CogIcon, FolderIcon, Heading1Icon, Heading2Icon, Heading3Icon, ItalicIcon, ListIcon, ListOrderedIcon, PilcrowIcon, SplitIcon, Strikethrough, SquareCheck, TextQuoteIcon, UnderlineIcon, HighlighterIcon, LinkIcon, ImageIcon, TableIcon } from 'lucide-react';
+
 import { useEditor, EditorContent, Editor } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Underline from "@tiptap/extension-underline";
+import Highlight from "@tiptap/extension-highlight";
+import Link from "@tiptap/extension-link";
+import Image from "@tiptap/extension-image";
+import Table from "@tiptap/extension-table";
+import TableRow from "@tiptap/extension-table-row";
+import TableCell from "@tiptap/extension-table-cell";
+import TableHeader from "@tiptap/extension-table-header";
+
 import { Button } from '@/components/ui/button';
 import { FileTable } from "./FileTable";
 
-import Text from '@tiptap/extension-text'
-import Paragraph from '@tiptap/extension-paragraph'
-import Heading from '@tiptap/extension-heading'
-import CodeBlock from '@tiptap/extension-code-block'
-import Gapcursor from '@tiptap/extension-gapcursor'
-import ListItem from '@tiptap/extension-list-item'
-import TextStyle from '@tiptap/extension-text-style'
-import StarterKit from '@tiptap/starter-kit';
-
 import useChatStore from '@/lib/store/chatStore';
-import React from 'react';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../../../convex/_generated/api';
 import { title } from 'process';
@@ -44,16 +46,15 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   const editor = useEditor({
     extensions: [
       // TextStyle.configure({ types: [ListItem.name] }),
-      StarterKit.configure({
-      bulletList: {
-        keepMarks: true,
-        keepAttributes: false, 
-      },
-      orderedList: {
-        keepMarks: true,
-        keepAttributes: false, 
-      },
-    }),
+      StarterKit,
+      Underline,
+      Highlight,
+      Link.configure({ openOnClick: false }),
+      Image,
+      Table.configure({ resizable: true }),
+      TableRow,
+      TableHeader,
+      TableCell,
     ],
     content: initialContent,
     onUpdate: ({ editor }) => {
@@ -74,6 +75,28 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   if (!editor) {
     return null;
   }
+
+  const addImage = () => {
+    const url = window.prompt("Enter image URL");
+    if (url) {
+      editor.chain().focus().setImage({ src: url }).run();
+    }
+  };
+
+  const setLink = () => {
+    const previousUrl = editor.getAttributes("link").href;
+    const url = window.prompt("Enter URL", previousUrl);
+    if (url === null) return;
+    if (url === "") {
+      editor.chain().focus().unsetLink().run();
+    } else {
+      editor.chain().focus().setLink({ href: url }).run();
+    }
+  };
+
+  const addTable = () => {
+    editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+  };
 
   return (
     <div className='flex flex-col'>
@@ -114,54 +137,77 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
 
 
       {/* Dynamic Content */}
-      <div className="flex-grow overflow-y-auto m-2">
+      <div className="flex-grow overflow-y-auto">
         {activeView === "editor" && (
-          <div>
+          <div className="flex flex-col h-full w-full">
             {/* Editor Toolbar */}
-            <div className="flex flex-row gap-x-4 border-b bg-white p-2 pl-4 py-0.5 items-center">
-              <button
-                onClick={() => editor.chain().focus().toggleBold().run()}
-                disabled={!editor.can().chain().focus().toggleBold().run()}
-                className={editor.isActive("bold") ? "is-active" : ""}
-              >
-                <BoldIcon size={18} />
-              </button>
-              <button
-                onClick={() => editor.chain().focus().toggleItalic().run()}
-                disabled={!editor.can().chain().focus().toggleItalic().run()}
-                className={editor.isActive("italic") ? "is-active" : ""}
-              >
-                <ItalicIcon size={18} />
-              </button>
-              <button
-                onClick={() => editor.chain().focus().toggleStrike().run()}
-                disabled={!editor.can().chain().focus().toggleStrike().run()}
-                className={editor.isActive("strike") ? "is-active" : ""}
-              >
-                <Strikethrough size={19} />
-              </button>
-              <button
-                onClick={() => editor.chain().focus().setParagraph().run()}
-                className={editor.isActive("paragraph") ? "is-active" : ""}
-              >
-                <PilcrowIcon size={20} />
-              </button>
-              <button
-                onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-                className={editor.isActive("codeBlock") ? "is-active" : ""}
-              >
-                <CodeIcon size={20} />
-              </button>
-              <button
-                onClick={() => editor.chain().focus().toggleBlockquote().run()}
-                className={editor.isActive("blockquote") ? "is-active" : ""}
-              >
-                <TextQuoteIcon size={20} />
-              </button>
+            <div className="flex flex-row gap-x-2 border-b bg-white p-2 items-center">
+              {[
+                {
+                  icon: <BoldIcon size={18} />,
+                  action: () => editor.chain().focus().toggleBold().run(),
+                  isActive: editor.isActive("bold"),
+                },
+                {
+                  icon: <ItalicIcon size={18} />,
+                  action: () => editor.chain().focus().toggleItalic().run(),
+                  isActive: editor.isActive("italic"),
+                },
+                {
+                  icon: <UnderlineIcon size={18} />,
+                  action: () => editor.chain().focus().toggleUnderline().run(),
+                  isActive: editor.isActive("underline"),
+                },
+                {
+                  icon: <Strikethrough size={18} />,
+                  action: () => editor.chain().focus().toggleStrike().run(),
+                  isActive: editor.isActive("strike"),
+                },
+                {
+                  icon: <HighlighterIcon size={18} />,
+                  action: () => editor.chain().focus().toggleHighlight().run(),
+                  isActive: editor.isActive("highlight"),
+                },
+                {
+                  icon: <LinkIcon size={18} />,
+                  action: setLink,
+                  isActive: editor.isActive("link"),
+                },
+                {
+                  icon: <ImageIcon size={18} />,
+                  action: addImage,
+                  isActive: false,
+                },
+                {
+                  icon: <TableIcon size={18} />,
+                  action: addTable,
+                  isActive: false,
+                },
+                {
+                  icon: <CodeIcon size={18} />,
+                  action: () => editor.chain().focus().toggleCodeBlock().run(),
+                  isActive: editor.isActive("codeBlock"),
+                },
+                {/* {
+                  icon: <TextQuoteIcon size={18} />,
+                  action: () => editor.chain().focus().toggleBlockquote().run(),
+                  isActive: editor.isActive("blockquote"),
+                }, */}
+              ].map((button, index) => (
+                <button
+                  key={index}
+                  onClick={button.action}
+                  className={`p-2 ${button.isActive ? "bg-gray-200" : ""}`}
+                >
+                  {button.icon}
+                </button>
+              ))}
             </div>
 
             {/* Editor Content */}
-            <EditorContent editor={editor} />
+            <div className="flex-grow overflow-y-auto bg-white">
+              <EditorContent editor={editor} className="h-full w-full p-4" />
+            </div>
           </div>
         )}
         {activeView === "files" && (
