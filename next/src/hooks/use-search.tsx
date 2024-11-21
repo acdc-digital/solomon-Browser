@@ -1,7 +1,7 @@
 // Search Function 
 // /Users/matthewsimon/Documents/github/solomon-electron/solomon-electron/next/src/hooks/use-search.tsx
 
-import { create } from "zustand";
+import { create } from 'zustand';
 
 type SearchStore = {
     isOpen: boolean;

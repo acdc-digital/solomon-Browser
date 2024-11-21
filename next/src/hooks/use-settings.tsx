@@ -1,7 +1,7 @@
 // Use Settings 
 // /Users/matthewsimon/Documents/github/solomon-electron/solomon-electron/next/src/hooks/use-settings.tsx
 
-import { create } from "zustand";
+import { create } from 'zustand';
 
 type SettingsStore = {
   isOpen: boolean;

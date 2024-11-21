@@ -1,7 +1,7 @@
 // FileTable.tsx
 // /Users/matthewsimon/Documents/Github/solomon-electron/next/src/components/canvas/(Projects)/_components/FileTable.tsx
 
-import React from "react";
+import React, { useState } from "react";
 import UploadDocumentForm from "./UploadDocumentForm";
 
 import {
@@ -34,14 +34,15 @@ export function FileTable({ caption, files }) {
   ];
 
   // const documents = useQuery(api.documents.getDocuments)
+  const [isOpen, setIsOpen] = useState(false);
 
   return (
     <div className="flex-grow overflow-y-auto m-2">
       {/* Add Files Dialog */}
       <div className="flex flex-row justify-end mr-1">
-        <Dialog>
+        <Dialog onOpenChange={setIsOpen} open={isOpen}>
           <DialogTrigger asChild>
-            <Button className="text-gray-600 border-b border-gray-500 ml-2 mt-1 mb-1"
+            <Button className="text-gray-600 border-b border-gray-500 ml-2 mt-1 mb-2"
                     variant="outline"
                     size="sm"
                     >
@@ -55,7 +56,7 @@ export function FileTable({ caption, files }) {
               <DialogDescription>
                 New documents will be indexed to your Project for your assistant to search.
               </DialogDescription>
-                <UploadDocumentForm />
+                <UploadDocumentForm onUpload={() => setIsOpen(false)} />
             </DialogHeader>
           </DialogContent>
         </Dialog>

@@ -15,7 +15,11 @@ const formSchema = z.object({
     title: z.string().min(1).max(250),
 });
 
-export default function UploadDocumentForm() {
+export default function UploadDocumentForm({
+        onUpload,
+    }: {
+        onUpload: () => void;
+    }) {
     const createDocument = useMutation(api.documents.createDocument);
 
     const form = useForm<z.infer<typeof formSchema>>({
@@ -25,8 +29,9 @@ export default function UploadDocumentForm() {
         },
     })
 
-    function onSubmit(values: z.infer<typeof formSchema>) {
-        createDocument(values);
+    async function onSubmit(values: z.infer<typeof formSchema>) {
+        await createDocument(values);
+        onUpload();
     }
 
     return (
