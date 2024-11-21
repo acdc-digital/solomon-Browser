@@ -1,6 +1,10 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
+export const generateUploadUrl = mutation(async (ctx) => {
+    return await ctx.storage.generateUploadUrl();
+});
+
 export const getDocuments = query({
     async handler(ctx) {
         return await ctx.db.query('documents').collect()
@@ -10,6 +14,7 @@ export const getDocuments = query({
 export const createDocument = mutation({
     args: {
         title: v.string(),
+        fileId: v.string(),
         parentProject: v.optional(v.id("projects")),
     },
     async handler(ctx, args) {
@@ -30,6 +35,7 @@ export const createDocument = mutation({
         // Insert the document with userId and other required fields
         await ctx.db.insert('documents', {
             title: args.title,
+            fileId: args.fileId,
             userId: identity.subject, // Use the authenticated user's ID
             parentProject: args.parentProject, // Include the optional parentProject
         });

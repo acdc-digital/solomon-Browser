@@ -28,6 +28,7 @@ export default defineSchema({
   // Schema for Documents
   documents: defineTable({
     title: v.string(),
+    fileId: v.string(),
     content: v.optional(v.string()), // Optional content for the document
     userId: v.string(), // The user who created the document
     parentProject: v.optional(v.id("projects")), // Link to the parent project
