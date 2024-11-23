@@ -7,22 +7,26 @@ import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { Title } from "./_components/Title";
 import { TipTapEditor } from "./_components/TipTapEditor";
-import { FileTable } from "./_components/FileTable";
+import { Button } from "@/components/ui/button";
+import { AlignHorizontalDistributeCenterIcon, BoldIcon, BoltIcon, BotIcon, BotMessageSquareIcon, CodeIcon, CogIcon, FolderIcon, Heading1Icon, Heading2Icon, Heading3Icon, ItalicIcon, ListIcon, ListOrderedIcon, PilcrowIcon, SplitIcon, Strikethrough, SquareCheck, TextQuoteIcon, UnderlineIcon, HighlighterIcon, LinkIcon, ImageIcon, TableIcon } from 'lucide-react';
+import { useEditorStore } from "@/lib/store/editorStore";
+import { UploadDocumentButton } from "./_components/FileTable";
+import useChatStore from '@/lib/store/chatStore';
 
 // Fetch project data based on projectId
 const Projects: React.FC<{ projectId: string }> = ({ projectId }) => {
+  // Destructure activateFiles from the store
+  const { activeView, setActiveView } = useEditorStore();
+
+  // Destructure activateChat from the store
+  const { activateChat } = useChatStore();
+
   useEffect(() => {
     if (projectId) {
       console.log("Fetching data for project ID:", projectId);
     }
     // This effect runs when projectId changes
     }, [projectId]);
-
-    {/* const projectFiles = [
-    { filename: "report.pdf", type: "PDF", dateAdded: "2022-01-01" },
-    { filename: "design.sketch", type: "Sketch File", dateAdded: "2022-01-02" },
-      // More files
-    ]; */} 
 
   const update = useMutation(api.projects.update);
   const onChange = async (content: string) => {
@@ -65,18 +69,59 @@ const Projects: React.FC<{ projectId: string }> = ({ projectId }) => {
             />
             </div>
           </div>
-          {/* <div>
-          <FileTable
-            caption="Project Files"
-            files={projectFiles}
-          />
-          </div> */} 
-          <div className="ml-3 mr-6 rounded-lg border border-b">
-          <TipTapEditor
-          initialContent={project.content}
-          onChange={onChange}
-          />
+
+          {/* Canvas State-Change Header */}
+          <div className="flex flex-row gap-x-4 border rounded-t-lg bg-gray-50 ml-3 mr-6 p-4 pl-4 py-2 justify-end">
+              <Button className={`text-gray-600 ${
+                      activeView === "editor" ? "border-b border-gray-500" : ""
+                      }`}
+                      variant="outline"
+                      onClick={() => setActiveView("editor")} >
+                    <BoltIcon className="mr-2 h-4 w-4" />
+                  Editor
+              </Button>
+              <Button className={`text-gray-600 ${
+                      activeView === "files" ? "border-b border-gray-500" : ""
+                      }`}
+                      variant="outline"
+                      onClick={() => setActiveView("files")} >
+                    <FolderIcon className="mr-2 h-4 w-4" />
+                  Files
+              </Button>
+              <Button
+                className="text-gray-600"
+                variant="outline"
+                >
+                <SquareCheck className="mr-2 h-5 w-5" />
+                Tasks
+              </Button>
+              <Button
+                className="text-gray-600"
+                variant="outline"
+                onClick={() => activateChat()}
+              >
+                <BotIcon className="mr-2 h-5 w-5" />
+                Chat
+              </Button>
           </div>
+
+          {/* State-Change Components */}
+          {/* Editor */}
+          {activeView === "editor" && (
+            <div className="ml-3 mr-6 border-b border-l border-r">
+            <TipTapEditor
+            initialContent={project.content}
+            onChange={onChange}
+            />
+            </div>
+          )}
+          {/* Files */}
+          {activeView === "files" && (
+            <div className="ml-3 mr-6 border-b border-l border-r">
+            <UploadDocumentButton
+            />
+            </div>
+        )}
       </div>
     )
 };

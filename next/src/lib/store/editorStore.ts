@@ -1,5 +1,5 @@
 // store/editorStore.ts
-import create from "zustand";
+import { create } from 'zustand'
 
 interface EditorState {
   activeView: "editor" | "files";

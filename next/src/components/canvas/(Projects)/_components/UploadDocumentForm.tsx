@@ -1,15 +1,19 @@
 "use client"
 
 import { z } from "zod"
-
 import {zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { Button } from "@/components/ui/button"
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { createDocument } from "../../../../../convex/documents"
 import { useMutation } from "convex/react"
 import { api } from "../../../../../convex/_generated/api"
+
+interface UploadDocumentFormProps {
+    onUpload: () => void;
+    projectId: string;
+    parentProjectId?: string;
+  }
 
 const formSchema = z.object({
     title: z.string().min(1).max(250),
