@@ -121,7 +121,7 @@ const Projects: React.FC<{ projectId: string }> = ({ projectId }) => {
             <UploadDocumentButton
             />
             </div>
-        )}
+          )}
       </div>
     )
 };

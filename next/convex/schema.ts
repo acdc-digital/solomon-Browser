@@ -7,14 +7,21 @@ import { v } from "convex/values";
 export default defineSchema({
   // Default Schema for Projects 
   projects: defineTable({
-    title: v.string(),
+    type: v.string(), // 'project' or 'document'
+    // Projects Fields
+    title: v.optional(v.string()),
     userId: v.string(),
     isArchived: v.boolean(),
     parentProject: v.optional(v.id("projects")),
     content: v.optional(v.string()),
-    icon: v.optional(v.string()),
-    isPublished: v.boolean(),
+    isPublished: v.optional(v.boolean()),
     embeddings: v.optional(v.array(v.number())),
+
+    // Document Fields
+    documentTitle: v.optional(v.string()),
+    fileId: v.optional(v.string()),
+    documentContent: v.optional(v.string()),
+    documentEmbeddings: v.optional(v.string()),
   })
   .index("by_user", ["userId"])
   .index("by_user_parent", ["userId", "parentProject"]),
@@ -24,15 +31,4 @@ export default defineSchema({
     input: v.string(),
     response: v.string(),
   }),
-
-  // Schema for Documents
-  documents: defineTable({
-    title: v.string(),
-    fileId: v.string(),
-    content: v.optional(v.string()), // Optional content for the document
-    userId: v.string(), // The user who created the document
-    parentProject: v.optional(v.id("projects")), // Link to the parent project
-  })
-  .index("by_user", ["userId"]) // Index for querying documents by user
-  .index("by_user_parent", ["userId", "parentProject"]), // Index for querying documents by parent project
 });

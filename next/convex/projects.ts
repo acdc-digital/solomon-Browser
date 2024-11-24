@@ -5,6 +5,61 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
 
+export const generateUploadUrl = mutation(async (ctx) => {
+    return await ctx.storage.generateUploadUrl();
+});
+
+export const getDocuments = query({
+    async handler(ctx) {
+	return await ctx.db.query('projects').collect()
+    },
+})
+
+export const createDocument = mutation({
+    args: {
+        documentTitle: v.string(),
+        fileId: v.string(),
+        documentContent: v.optional(v.string()),
+        documentEmbeddings: v.optional(v.string()),
+        parentProject: v.optional(v.id("projects")),
+    },
+    async handler(ctx, args) {
+        // Retrieve the authenticated user's identity
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) {
+            throw new Error("User not authenticated.");
+        }
+
+        // Validate if parentProject exists
+        if (args.parentProject) {
+            const project = await ctx.db.get(args.parentProject);
+            if (!project) {
+                throw new Error("Associated parent project not found.");
+            }
+        }
+
+        // Insert the document with userId and other required fields
+        await ctx.db.insert('projects', {
+			  type: 'document', // Set the type to 'document'
+              userId: identity.subject,
+              isArchived: false,
+              isPublished: false,
+              parentProject: args.parentProject ?? undefined,
+
+			  // Document Fields
+			  documentTitle: args.documentTitle,
+			  fileId: args.fileId,
+			  documentContent: args.documentContent,
+			  documentEmbeddings: args.documentEmbeddings,
+
+			  // Project Fields (set to undefined)
+			  title: undefined,
+			  content: undefined,
+			  embeddings: undefined,
+    });
+    },
+});
+
 export const archive = mutation({
 	args: { id: v.id("projects") },
 	handler: async (ctx, args) => {
@@ -85,8 +140,18 @@ export const getSidebar = query({
 
 export const create = mutation({
 	args: {
+		// Project Fields
 		title: v.string(),
-		parentProject: v.optional(v.id("projects"))
+		parentProject: v.optional(v.id("projects")),
+		content: v.optional(v.string()),
+		isPublished: v.optional(v.boolean()),
+		embeddings: v.optional(v.array(v.number())),
+
+		// Document Fields
+		documentTitle: v.optional(v.string()),
+		fileId: v.optional(v.string()),
+		documentContent: v.optional(v.string()),
+		documentEmbeddings: v.optional(v.string()),
 	},
 	handler: async (ctx, args) => {
 		const identity = await ctx.auth.getUserIdentity();
@@ -98,11 +163,21 @@ export const create = mutation({
 		const userId = identity.subject;
 
 		const project = await ctx.db.insert("projects", {
+			type: 'project', // Set the type to 'project'
+			// Project Fields
 			title: args.title,
 			parentProject: args.parentProject,
 			userId,
-			isArchived: false, 
-			isPublished: false,
+			isArchived: false,
+			isPublished: args.isPublished ?? false,
+			content: args.content,
+			embeddings: args.embeddings,
+
+			// Document Fields
+			documentTitle: args.documentTitle,
+			fileId: args.fileId,
+			documentContent: args.documentContent,
+			documentEmbeddings: args.documentEmbeddings,
 		});
 	}
 });

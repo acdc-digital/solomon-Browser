@@ -12,7 +12,7 @@ import { api } from "../../../../../convex/_generated/api"
 interface UploadDocumentFormProps {
     onUpload: () => void;
     projectId: string;
-    parentProjectId?: string;
+    parentProject?: string;
   }
 
 const formSchema = z.object({
@@ -22,11 +22,10 @@ const formSchema = z.object({
 
 export default function UploadDocumentForm({
         onUpload,
-    }: {
-        onUpload: () => void;
-    }) {
-    const createDocument = useMutation(api.documents.createDocument);
-    const generateUploadUrl = useMutation(api.documents.generateUploadUrl);
+        projectId,
+        }: UploadDocumentFormProps) {
+    const createDocument = useMutation(api.projects.createDocument);
+    const generateUploadUrl = useMutation(api.projects.generateUploadUrl);
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
@@ -46,8 +45,9 @@ export default function UploadDocumentForm({
         const { storageId } = await result.json();
 
         await createDocument({
-            title: values.title,
+            documentTitle: values.title,
             fileId: storageId as string,
+            parentProject: projectId as string,
         });
         onUpload();
     }
