@@ -8,11 +8,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input"
 import { useMutation } from "convex/react"
 import { api } from "../../../../../convex/_generated/api"
+import { Id } from "../../../../../convex/_generated/dataModel"
 
 interface UploadDocumentFormProps {
     onUpload: () => void;
-    projectId: string;
-    parentProject?: string;
+    projectId: Id<"projects">;
+    parentProject?: Id<"projects">;
   }
 
 const formSchema = z.object({
@@ -47,7 +48,7 @@ export default function UploadDocumentForm({
         await createDocument({
             documentTitle: values.title,
             fileId: storageId as string,
-            parentProject: projectId as string,
+            parentProject: projectId,
         });
         onUpload();
     }

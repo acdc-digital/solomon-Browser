@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { FilePlus } from "lucide-react";
 
-export function UploadDocumentButton() {
+export function UploadDocumentButton({ projectId }) {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -39,7 +39,10 @@ export function UploadDocumentButton() {
               <DialogDescription>
                 New documents will be indexed to your project for your assistant to search.
               </DialogDescription>
-              <UploadDocumentForm onUpload={() => setIsOpen(false)} />
+              <UploadDocumentForm
+                onUpload={() => setIsOpen(false)}
+                projectId={projectId}
+                />
             </DialogHeader>
           </DialogContent>
         </Dialog>

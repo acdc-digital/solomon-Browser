@@ -119,6 +119,7 @@ const Projects: React.FC<{ projectId: string }> = ({ projectId }) => {
           {activeView === "files" && (
             <div className="ml-3 mr-6 border-b border-l border-r">
             <UploadDocumentButton
+            projectId={projectId}
             />
             </div>
           )}

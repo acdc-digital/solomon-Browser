@@ -44,7 +44,7 @@ export const createDocument = mutation({
               userId: identity.subject,
               isArchived: false,
               isPublished: false,
-              parentProject: args.parentProject ?? undefined,
+              parentProject: args.parentProject,
 
 			  // Document Fields
 			  documentTitle: args.documentTitle,
@@ -111,32 +111,34 @@ export const archive = mutation({
 
 export const getSidebar = query({
 	args: {
-		parentProject: v.optional(v.id("projects"))
+	  parentProject: v.optional(v.id("projects")),
 	},
 	handler: async (ctx, args) => {
-		const identity = await ctx.auth.getUserIdentity();
+	  const identity = await ctx.auth.getUserIdentity();
 
-		if (!identity) {
-			throw new Error("User Not Authenticated.");
-		}
+	  if (!identity) {
+		throw new Error("User Not Authenticated.");
+	  }
 
-		const userId = identity.subject;
+	  const userId = identity.subject;
 
-		const projects = await ctx.db
+	  const projects = await ctx.db
 		.query("projects")
-		.withIndex("by_user_parent", (q) => q
-			.eq("userId", userId)
-			.eq("parentProject", args.parentProject)
+		.withIndex("by_user_parent", (q) =>
+		  q.eq("userId", userId).eq("parentProject", args.parentProject)
 		)
 		.filter((q) =>
-		q.eq(q.field("isArchived"), false)
+		  q.and(
+			q.eq(q.field("isArchived"), false),
+			q.eq(q.field("type"), "project") // Only fetch projects
+		  )
 		)
 		.order("desc")
 		.collect();
 
-		return projects;
+	  return projects;
 	},
-});
+  });
 
 export const create = mutation({
 	args: {
