@@ -12,6 +12,7 @@ import { AlignHorizontalDistributeCenterIcon, BoldIcon, BoltIcon, BotIcon, BotMe
 import { useEditorStore } from "@/lib/store/editorStore";
 import { UploadDocumentButton } from "./_components/FileTable";
 import useChatStore from '@/lib/store/chatStore';
+import { FileList } from "./_components/FileList";
 
 // Fetch project data based on projectId
 const Projects: React.FC<{ projectId: string }> = ({ projectId }) => {
@@ -118,9 +119,8 @@ const Projects: React.FC<{ projectId: string }> = ({ projectId }) => {
           {/* Files */}
           {activeView === "files" && (
             <div className="ml-3 mr-6 border-b border-l border-r">
-            <UploadDocumentButton
-            projectId={projectId}
-            />
+              <UploadDocumentButton projectId={projectId} />
+              <FileList projectId={projectId} />
             </div>
           )}
       </div>

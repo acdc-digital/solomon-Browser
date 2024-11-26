@@ -60,6 +60,32 @@ export const createDocument = mutation({
     },
 });
 
+export const getDocumentsByProjectId = query({
+	args: { projectId: v.id("projects") },
+	handler: async (ctx, args) => {
+	  const identity = await ctx.auth.getUserIdentity();
+	  if (!identity) {
+		throw new Error("User Not Authenticated.");
+	  }
+	  const userId = identity.subject;
+
+	  const documents = await ctx.db
+		.query("projects")
+		.withIndex("by_user_parent", (q) =>
+		  q.eq("userId", userId).eq("parentProject", args.projectId)
+		)
+		.filter((q) =>
+		  q.and(
+			q.eq(q.field("isArchived"), false),
+			q.eq(q.field("type"), "document")
+		  )
+		)
+		.collect();
+
+	  return documents;
+	},
+  });
+
 export const archive = mutation({
 	args: { id: v.id("projects") },
 	handler: async (ctx, args) => {
