@@ -28,6 +28,7 @@ const Docs = () => {
               <Badge variant="outline">TipTap Editor</Badge>
               <Badge variant="outline">Clerk Auth</Badge>
               <Badge variant="outline">OpenAI Chat</Badge>
+              <Badge variant="outline">Zustand</Badge>
             </div>
             {/* Button Scroll Navbar */}
             <div className="mt-6 ml-6 flex flex-row gap-x-4">
@@ -59,6 +60,15 @@ const Docs = () => {
             height="650"
             width="650"
             alt="Top level file organization."
+            className="pb-4"
+            />
+            </div>
+            <div className="mt-8 ml-8 flex flex-col items-start">
+            <Image
+            src="/Project_Id_Layers.png"
+            height="650"
+            width="650"
+            alt="Associating projectId's with documents."
             className="pb-4"
             />
             </div>
