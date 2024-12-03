@@ -19,9 +19,10 @@ export default defineSchema({
 
     // Document Fields
     documentTitle: v.optional(v.string()),
-    fileId: v.optional(v.string()),
+    fileId: v.string(),
     documentContent: v.optional(v.string()),
-    documentEmbeddings: v.optional(v.string()),
+    documentEmbeddings: v.optional(v.array(v.array(v.number()))),
+    documentChunks: v.optional(v.array(v.string())),
   })
   .index("by_user", ["userId"])
   .index("by_user_parent", ["userId", "parentProject"]),

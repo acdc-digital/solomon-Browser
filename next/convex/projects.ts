@@ -2,8 +2,12 @@
 // /Users/matthewsimon/Documents/GitHub/solomon-electron/solomon-electron/next/convex/projects.ts
 
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, MutationCtx, query } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
+import { api } from "./_generated/api";
+
+// import pdfParse from 'pdf-parse';
+// import OpenAI from "openai";
 
 export const generateUploadUrl = mutation(async (ctx) => {
     return await ctx.storage.generateUploadUrl();
@@ -20,7 +24,7 @@ export const createDocument = mutation({
         documentTitle: v.string(),
         fileId: v.string(),
         documentContent: v.optional(v.string()),
-        documentEmbeddings: v.optional(v.string()),
+        documentEmbeddings: v.optional(v.array(v.array(v.number()))),
         parentProject: v.optional(v.id("projects")),
     },
     async handler(ctx, args) {
@@ -39,7 +43,7 @@ export const createDocument = mutation({
         }
 
         // Insert the document with userId and other required fields
-        await ctx.db.insert('projects', {
+        const documentId = await ctx.db.insert('projects', {
 			  type: 'document', // Set the type to 'document'
               userId: identity.subject,
               isArchived: false,
@@ -57,8 +61,129 @@ export const createDocument = mutation({
 			  content: undefined,
 			  embeddings: undefined,
     });
+			  // Schedule a job to process the document
+			  // await ctx.scheduler.runAfter(0, api.projects.processDocument, {
+				//  documentId,
+			  // });
     },
 });
+
+{/*
+// Generate Embeddings Function
+async function generateEmbeddings(chunks: string[], ctx: MutationCtx): Promise<number[][]> {
+	// Initialize OpenAI client
+	const openai = new OpenAI();
+
+	try {
+	  const response = await openai.embeddings.create({
+		model: "text-embedding-ada-002",
+		input: chunks,
+	  });
+
+	  // Extract embeddings from the response
+	  const embeddings = response.data.map((item) => item.embedding);
+	  return embeddings;
+	} catch (error) {
+	  console.error("Error generating embeddings:", error);
+	  throw new Error("Failed to generate embeddings.");
+	}
+  }
+// Get Embedding Function
+async function getEmbedding(text: string, ctx: MutationCtx): Promise<number[]> {
+	// Initialize OpenAI client
+	const openai = new OpenAI();
+
+	try {
+	  const response = await openai.embeddings.create({
+		model: "text-embedding-ada-002",
+		input: text,
+	  });
+
+	  // Extract the embedding from the response
+	  const embedding = response.data[0].embedding;
+	  return embedding;
+	} catch (error) {
+	  console.error("Error generating embedding:", error);
+	  throw new Error("Failed to generate embedding.");
+	}
+  }
+
+// Extract Text Function using pdf-parse
+async function extractTextFromBuffer(buffer: Buffer): Promise<string> {
+	try {
+	  const data = await pdfParse(buffer);
+	  return data.text;
+	} catch (error) {
+	  console.error('Error extracting text from buffer:', error);
+	  throw new Error('Failed to extract text from the PDF file.');
+	}
+  }
+
+// Chunk Text Function
+function chunkText(text: string, maxChunkSize = 1000): string[] {
+	const sentences = text.match(/[^\.!\?]+[\.!\?]+/g) || [];
+	const chunks: string[] = [];
+	let chunk = "";
+
+	for (const sentence of sentences) {
+	  if (chunk.length + sentence.length > maxChunkSize) {
+		chunks.push(chunk.trim());
+		chunk = "";
+	  }
+	  chunk += sentence + " ";
+	}
+	if (chunk) {
+	  chunks.push(chunk.trim());
+	}
+	return chunks;
+  }
+
+// Store Chunks and Embeddings Function
+async function storeChunksAndEmbeddings(
+	ctx: MutationCtx,
+	documentId: Id<"projects">,
+	chunks: string[],
+	embeddings: number[][]
+  ): Promise<void> {
+	await ctx.db.patch(documentId, {
+	  documentEmbeddings: embeddings,
+	  documentChunks: chunks, // Include this if you added documentChunks to the schema
+	});
+  }
+
+export const processDocument = mutation({
+	args: {
+	  documentId: v.id("projects"),
+	},
+	handler: async (ctx, args) => {
+	  const document = await ctx.db.get(args.documentId);
+	  if (!document) {
+		throw new Error("Document not found.");
+	  }
+
+	  // Generate a download URL for the file
+	  const url = await ctx.storage.getUrl(document.fileId);
+	  if (!url) {
+		throw new Error("Failed to get URL for the document's file.");
+	  }
+
+	  // Fetch the file content
+	  const response = await fetch(url);
+	  const arrayBuffer = await response.arrayBuffer();
+	  const buffer = Buffer.from(arrayBuffer);
+
+	  // Extract text from the file (e.g., PDF)
+	  const textContent = await extractTextFromBuffer(buffer);
+
+	  // Proceed to chunking and embedding
+	  const chunks = chunkText(textContent);
+	  const embeddings = await generateEmbeddings(chunks, ctx);
+
+	  // Store chunks and embeddings in Convex
+	  await storeChunksAndEmbeddings(ctx, document._id, chunks, embeddings);
+	},
+  });
+  */}
 
 export const getDocumentsByProjectId = query({
 	args: { projectId: v.id("projects") },
@@ -177,9 +302,9 @@ export const create = mutation({
 
 		// Document Fields
 		documentTitle: v.optional(v.string()),
-		fileId: v.optional(v.string()),
+		fileId: v.string(),
 		documentContent: v.optional(v.string()),
-		documentEmbeddings: v.optional(v.string()),
+		documentEmbeddings: v.optional(v.array(v.array(v.number()))),
 	},
 	handler: async (ctx, args) => {
 		const identity = await ctx.auth.getUserIdentity();
