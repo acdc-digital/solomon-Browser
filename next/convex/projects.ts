@@ -2,29 +2,113 @@
 // /Users/matthewsimon/Documents/GitHub/solomon-electron/solomon-electron/next/convex/projects.ts
 
 import { v } from "convex/values";
-import { mutation, MutationCtx, query } from "./_generated/server";
+import { mutation, MutationCtx, query, internalAction, ActionCtx, action } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
 import { api } from "./_generated/api";
-
+import { UnstructuredLoader } from "@langchain/community/document_loaders/fs/unstructured";
+import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
+import { CacheBackedEmbeddings } from "langchain/embeddings/cache_backed";
+import { OpenAIEmbeddings } from "@langchain/openai";
+import { ConvexKVStore } from "@langchain/community/storage/convex";
+import { ConvexVectorStore } from "@langchain/community/vectorstores/convex";
+import fetch from "node-fetch";
 // import pdfParse from 'pdf-parse';
 // import OpenAI from "openai";
 
-export const generateUploadUrl = mutation(async (ctx) => {
-    return await ctx.storage.generateUploadUrl();
-});
+export const processDocument = action({
+	args: {
+	  documentId: v.id("projects"),
+	},
+	handler: async (ctx, { documentId }) => {
+	  // Step 1: Retrieve the document via a query
+	  const document = await ctx.runQuery(api.projects.getDocument, { documentId });
+	  if (!document) {
+		throw new Error("Document not found.");
+	  }
+	  if (!document.fileId) {
+		throw new Error("No file associated with the document.");
+	  }
+	  console.log("Loading document...");
 
-export const getDocuments = query({
-    async handler(ctx) {
-	return await ctx.db.query('projects').collect()
-    },
-})
+	  // Step 2: Generate a download URL for the file
+	  const fileUrl = await ctx.storage.getUrl(document.fileId);
+	  if (!fileUrl) {
+		throw new Error("Failed to retrieve file URL from storage.");
+	  }
+	  console.log("Got fileUrl:", fileUrl);
+
+	  // Step 3: Load the document using UnstructuredLoader
+	  const loader = new UnstructuredLoader(fileUrl);
+	  const docs = await loader.load();
+	  if (!docs.length) {
+		throw new Error("No content extracted from the document.");
+	  }
+	  console.log("Loaded docs:", docs.length);
+
+	  // Step 4: Split the document into chunks
+	  const textSplitter = new RecursiveCharacterTextSplitter({
+		chunkSize: 1000,
+		chunkOverlap: 200,
+	  });
+	  const splitDocs = await textSplitter.splitDocuments(docs);
+	  const docChunks = splitDocs.map((doc) => doc.pageContent);
+
+	  // Step 5: Initialize embeddings with caching, now `ctx` is ActionCtx
+	  const embeddings = new CacheBackedEmbeddings({
+		underlyingEmbeddings: new OpenAIEmbeddings(),
+		documentEmbeddingStore: new ConvexKVStore({ ctx }), // Allowed in actions
+	  });
+
+	  // Step 6a: Generate embeddings for the chunks
+	  const chunkEmbeddings = await embeddings.embedDocuments(docChunks);
+
+	  // Optionally, average embeddings into one representative vector
+	  const documentEmbedding = chunkEmbeddings[0].map((_, i) =>
+		chunkEmbeddings.reduce((sum, vec) => sum + vec[i], 0) / chunkEmbeddings.length
+	  );
+	  console.log("Computed embeddings");
+
+	  // Step 6b: Store embeddings in the vector index (optional)
+	  await ConvexVectorStore.fromDocuments(splitDocs, embeddings, { ctx });
+
+	  // Update the document embeddings and chunks via a mutation
+	  await ctx.runMutation(api.projects.updateDocumentEmbeddings, {
+		documentId,
+		documentChunks: docChunks,
+		documentEmbeddings: documentEmbedding,
+	  });
+
+	  // Step 7: Update the document entry to mark it as processed
+	  await ctx.runMutation(api.projects.updateDocumentProcessed, {
+		documentId,
+		isProcessed: true,
+	  });
+
+	  return { success: true };
+	},
+  });
+
+// This mutation updates the document's chunks and embeddings
+export const updateDocumentEmbeddings = mutation({
+	args: {
+	  documentId: v.id("projects"),
+	  documentChunks: v.array(v.string()),
+	  documentEmbeddings: v.array(v.float64()),
+	},
+	handler: async (ctx, args) => {
+	  await ctx.db.patch(args.documentId, {
+		documentChunks: args.documentChunks,
+		documentEmbeddings: args.documentEmbeddings,
+	  });
+	},
+  });
 
 export const createDocument = mutation({
     args: {
         documentTitle: v.string(),
-        fileId: v.string(),
+        fileId: v.optional(v.string()),
         documentContent: v.optional(v.string()),
-        documentEmbeddings: v.optional(v.array(v.array(v.number()))),
+        documentEmbeddings: v.optional(v.array(v.float64())),
         parentProject: v.optional(v.id("projects")),
     },
     async handler(ctx, args) {
@@ -53,20 +137,72 @@ export const createDocument = mutation({
 			  // Document Fields
 			  documentTitle: args.documentTitle,
 			  fileId: args.fileId,
-			  documentContent: args.documentContent,
 			  documentEmbeddings: args.documentEmbeddings,
 
 			  // Project Fields (set to undefined)
 			  title: undefined,
 			  content: undefined,
-			  embeddings: undefined,
+			  noteEmbeddings: undefined,
+			  isProcessed: false,
     });
+
+	// Schedule the document processing as an internal action
+    await ctx.scheduler.runAfter(0, api.projects.processDocument, {
+		documentId,
+	  });
+
+    return { documentId };
 			  // Schedule a job to process the document
 			  // await ctx.scheduler.runAfter(0, api.projects.processDocument, {
 				//  documentId,
 			  // });
     },
 });
+
+export const updateDocumentContent = mutation({
+	args: {
+	  documentId: v.id("projects"),
+	  documentContent: v.string(),
+	},
+	handler: async (ctx, args) => {
+	  // Ensure user authentication or implement access controls if needed
+	  await ctx.db.patch(args.documentId, {
+		documentText: args.documentContent,
+		isProcessed: false, // reset or ensure it's false if needed
+	  });
+	},
+  });
+
+// Additional helper functions you'll need to add to your Convex schema
+export const getDocument = query({
+	args: { documentId: v.id("projects") },
+	handler: async (ctx, args) => {
+	  return await ctx.db.get(args.documentId);
+	},
+  });
+
+  export const updateDocumentProcessed = mutation({
+	args: {
+	  documentId: v.id("projects"),
+	  isProcessed: v.boolean()
+	},
+	handler: async (ctx, args) => {
+	  await ctx.db.patch(args.documentId, {
+		isProcessed: args.isProcessed,
+		processedAt: new Date().toISOString(),
+	  });
+	},
+  });
+
+export const generateUploadUrl = mutation(async (ctx) => {
+    return await ctx.storage.generateUploadUrl();
+});
+
+export const getDocuments = query({
+    async handler(ctx) {
+	return await ctx.db.query('projects').collect()
+    },
+})
 
 {/*
 // Generate Embeddings Function
@@ -302,9 +438,9 @@ export const create = mutation({
 
 		// Document Fields
 		documentTitle: v.optional(v.string()),
-		fileId: v.string(),
+		fileId: v.optional(v.string()),
 		documentContent: v.optional(v.string()),
-		documentEmbeddings: v.optional(v.array(v.array(v.number()))),
+		documentEmbeddings: v.optional(v.array(v.float64())),
 	},
 	handler: async (ctx, args) => {
 		const identity = await ctx.auth.getUserIdentity();
@@ -324,13 +460,13 @@ export const create = mutation({
 			isArchived: false,
 			isPublished: args.isPublished ?? false,
 			content: args.content,
-			embeddings: args.embeddings,
+			noteEmbeddings: args.embeddings,
 
 			// Document Fields
 			documentTitle: args.documentTitle,
 			fileId: args.fileId,
-			documentContent: args.documentContent,
 			documentEmbeddings: args.documentEmbeddings,
+			isProcessed: false,
 		});
 	}
 });

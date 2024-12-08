@@ -1,98 +1,116 @@
+// UploadDocumentForm
+///Users/matthewsimon/Documents/Github/solomon-electron/next/src/components/canvas/(Projects)/_components/UploadDocumentForm.tsx
+
 "use client"
 
 import { z } from "zod"
-import {zodResolver } from "@hookform/resolvers/zod"
+import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { Button } from "@/components/ui/button"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { useMutation } from "convex/react"
+import { useAction, useMutation } from "convex/react"
 import { api } from "../../../../../convex/_generated/api"
 import { Id } from "../../../../../convex/_generated/dataModel"
 
 interface UploadDocumentFormProps {
-    onUpload: () => void;
-    projectId: Id<"projects">;
-    parentProject?: Id<"projects">;
-  }
+  onUpload: () => void;
+  projectId: Id<"projects">;
+  parentProject?: Id<"projects">;
+}
 
 const formSchema = z.object({
-    title: z.string().min(1).max(250),
-    file: z.instanceof(File),
+  title: z.string().min(1).max(250),
+  file: z.instanceof(File),
 });
 
-export default function UploadDocumentForm({
-        onUpload,
-        projectId,
-        }: UploadDocumentFormProps) {
-    const createDocument = useMutation(api.projects.createDocument);
-    const generateUploadUrl = useMutation(api.projects.generateUploadUrl);
+export default function UploadDocumentForm({ onUpload, projectId }: UploadDocumentFormProps) {
+  const createDocument = useMutation(api.projects.createDocument);
+  const generateUploadUrl = useMutation(api.projects.generateUploadUrl);
+  const processDocument = useAction(api.projects.processDocument);
 
-    const form = useForm<z.infer<typeof formSchema>>({
-        resolver: zodResolver(formSchema),
-        defaultValues: {
-            title: "",
-        },
-    })
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      title: "",
+    },
+  })
 
-    async function onSubmit(values: z.infer<typeof formSchema>) {
-        const url = await generateUploadUrl();
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    // Step 1: Generate upload URL
+    const url = await generateUploadUrl();
 
-        const result = await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": values.file.type },
-            body: values.file,
-        });
-        const { storageId } = await result.json();
-
-        await createDocument({
-            documentTitle: values.title,
-            fileId: storageId as string,
-            parentProject: projectId,
-        });
-        onUpload();
+    // Step 2: Upload the file to the returned URL
+    const result = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": values.file.type },
+      body: values.file,
+    });
+    if (!result.ok) {
+      throw new Error("File upload failed");
     }
 
-    return (
-        <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-                 <FormField
-                    control={form.control}
-                    name="title"
-                    render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Title</FormLabel>
-                        <FormControl>
-                        <Input placeholder="Document name." {...field} />
-                        </FormControl>
-                        <FormMessage />
-                    </FormItem>
-                    )}
-                 />
+    const { storageId } = await result.json();
 
-                <FormField
-                    control={form.control}
-                    name="file"
-                    render={({ field: { value, onChange, ...fieldProps } }) => (
-                    <FormItem>
-                        <FormLabel>Title</FormLabel>
-                        <FormControl>
-                        <Input
-                            {...fieldProps}
-                            type="file"
-                            accept=".txt, .xml, .doc, .pdf, application/pdf"
-                            onChange={(event) => {
-                                const file = event.target.files?.[0];
-                                onChange(file);
-                            }}
-                            />
-                        </FormControl>
-                        <FormMessage />
-                    </FormItem>
-                    )}
-                 />
-                  <Button type="submit">Submit</Button>
-            </form>
+    // Step 3: Create a document entry in the database
+    const { documentId } = await createDocument({
+      documentTitle: values.title,
+      fileId: storageId as string,
+      parentProject: projectId,
+    });
+
+    // Note: The `createDocument` mutation returns { documentId }
+    // not { id }. So ensure you use document.documentId.
+
+    // Step 4: Trigger the processing of the uploaded document
+    // The processDocument expects `{ documentId }` only.
+    // await processDocument({
+    //  documentId
+    // });
+
+    onUpload();
+  }
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+        <FormField
+          control={form.control}
+          name="title"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Title</FormLabel>
+              <FormControl>
+                <Input placeholder="Document name." {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="file"
+          render={({ field: { value, onChange, ...fieldProps } }) => (
+            <FormItem>
+              <FormLabel>File</FormLabel>
+              <FormControl>
+                <Input
+                  {...fieldProps}
+                  type="file"
+                  accept=".txt, .xml, .doc, .pdf, application/pdf"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    onChange(file);
+                  }}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <Button type="submit">Submit</Button>
+      </form>
     </Form>
-    )
+  )
 }

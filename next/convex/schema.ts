@@ -15,17 +15,23 @@ export default defineSchema({
     parentProject: v.optional(v.id("projects")),
     content: v.optional(v.string()),
     isPublished: v.optional(v.boolean()),
-    embeddings: v.optional(v.array(v.number())),
+    noteEmbeddings: v.optional(v.array(v.float64())),
 
     // Document Fields
     documentTitle: v.optional(v.string()),
-    fileId: v.string(),
-    documentContent: v.optional(v.string()),
-    documentEmbeddings: v.optional(v.array(v.array(v.number()))),
+    fileId: v.optional(v.string()),
+    documentText: v.optional(v.string()),
+    documentEmbeddings: v.optional(v.array(v.float64())),
     documentChunks: v.optional(v.array(v.string())),
+    isProcessed: v.boolean(),
+    processedAt: v.optional(v.string()),
   })
   .index("by_user", ["userId"])
-  .index("by_user_parent", ["userId", "parentProject"]),
+  .index("by_user_parent", ["userId", "parentProject"])
+  .vectorIndex("byEmbedding", {
+    vectorField: "documentEmbeddings",
+    dimensions: 1536,
+  }),
   
   // Schema for Chat
   chat: defineTable({

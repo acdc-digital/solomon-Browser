@@ -15,6 +15,7 @@ import type {
   FunctionReference,
 } from "convex/server";
 import type * as chat from "../chat.js";
+import type * as langchain_db from "../langchain/db.js";
 import type * as projects from "../projects.js";
 
 /**
@@ -27,6 +28,7 @@ import type * as projects from "../projects.js";
  */
 declare const fullApi: ApiFromModules<{
   chat: typeof chat;
+  "langchain/db": typeof langchain_db;
   projects: typeof projects;
 }>;
 export declare const api: FilterApi<
