@@ -3,6 +3,11 @@
 import { NextResponse } from 'next/server';
 import convex from '@/lib/convexClient';
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
+import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
+import { CacheBackedEmbeddings } from "langchain/embeddings/cache_backed";
+import { OpenAIEmbeddings } from "@langchain/openai";
+import { ConvexKVStore } from "@langchain/community/storage/convex";
+import { ConvexVectorStore } from "@langchain/community/vectorstores/convex";
 import fs from 'fs';
 import path from 'path';
 import fetch from 'node-fetch'; // Ensure node-fetch is installed
@@ -10,6 +15,8 @@ import fetch from 'node-fetch'; // Ensure node-fetch is installed
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  let tempFilePath = '';
+
   try {
     // Parse the incoming JSON body
     const { documentId, fileId } = await request.json();
@@ -33,7 +40,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Invoke the Convex mutation using the Client SDK
+    // Invoke the Convex mutation to get the PDF URL
     console.log('Invoking Convex mutation: projects:getFileUrl');
     const response = await convex.mutation('projects:getFileUrl', { fileId });
 
@@ -67,7 +74,7 @@ export async function POST(request: Request) {
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir);
     }
-    const tempFilePath = path.join(tempDir, `${fileId}.pdf`);
+    tempFilePath = path.join(tempDir, `${fileId}.pdf`);
 
     const arrayBuffer = await pdfResponse.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
@@ -87,28 +94,78 @@ export async function POST(request: Request) {
     const extractedText = docs.map(doc => doc.pageContent).join('\n');
     console.log('Extracted Text:', extractedText);
 
-    // Clean up: Delete the temporary file
-    fs.unlinkSync(tempFilePath);
-    console.log('Temporary file deleted.');
+    // **Step 4: Split the Document into Chunks**
+    console.log('Splitting the document into chunks');
 
-    // **Step 4: Update the Document Content in the Database**
+    const textSplitter = new RecursiveCharacterTextSplitter({
+      chunkSize: 1000,    // Adjust based on your needs
+      chunkOverlap: 200,  // Adjust based on your needs
+    });
+
+    const splitDocs = await textSplitter.splitDocuments(docs);
+    const docChunks = splitDocs.map((doc) => doc.pageContent);
+
+    console.log('Number of Chunks:', docChunks.length);
+
+    // **Step 5: Update the Document Content in the Database**
     console.log('Updating document content in the database');
     try {
       const updateResponse = await convex.mutation('projects:updateDocumentContent', {
         documentId,
         documentContent: extractedText,
+        documentChunks: docChunks, // Include the chunks
       });
 
       console.log('Update Response:', updateResponse);
-
-      return NextResponse.json(
-        { pdfUrl: response.url, text: extractedText },
-        { status: 200 }
-      );
     } catch (updateError: any) {
       console.error('Error updating document content:', updateError);
       return NextResponse.json(
         { error: 'Error updating document content' },
+        { status: 500 }
+      );
+    }
+
+    // **Step 6: Generate and Store Embeddings**
+    console.log('Generating embeddings for the chunks');
+
+    // Initialize OpenAIEmbeddings with your API key
+    const openAIEmbeddings = new OpenAIEmbeddings({
+      openAIApiKey: process.env.OPENAI_API_KEY, // Ensure this is set in your environment variables
+    });
+
+    // Generate embeddings for the chunks
+    const chunkEmbeddings: number[][] = await openAIEmbeddings.embedDocuments(docChunks);
+    console.log('Generated Embeddings:', chunkEmbeddings.length);
+
+    // Average embeddings into one representative vector
+    const documentEmbedding: number[] = chunkEmbeddings[0].map((_, i) =>
+      chunkEmbeddings.reduce((sum, vec) => sum + vec[i], 0) / chunkEmbeddings.length
+    );
+    console.log("Averaged document embedding:", documentEmbedding);
+
+    // **Step 7: Update the Document with Embeddings in the Database**
+    console.log('Updating document embeddings in the database');
+    try {
+      const embeddingsUpdateResponse = await convex.mutation('projects:updateDocumentEmbeddings', {
+        documentId,
+        documentEmbeddings: documentEmbedding, // Correct: Passing number[] instead of number[][]
+      });
+
+      console.log('Embeddings Update Response:', embeddingsUpdateResponse);
+
+      return NextResponse.json(
+        {
+          pdfUrl: response.url,
+          text: extractedText,
+          chunks: docChunks,
+          embeddingsGenerated: chunkEmbeddings.length
+        },
+        { status: 200 }
+      );
+    } catch (embeddingsError: any) {
+      console.error('Error updating embeddings:', embeddingsError);
+      return NextResponse.json(
+        { error: 'Error updating embeddings' },
         { status: 500 }
       );
     }
@@ -119,5 +176,11 @@ export async function POST(request: Request) {
       { error: error.message || 'Internal Server Error' },
       { status: 500 }
     );
+  } finally {
+    // Clean up: Delete the temporary file
+    if (tempFilePath && fs.existsSync(tempFilePath)) {
+      fs.unlinkSync(tempFilePath);
+      console.log('Temporary file deleted.');
+    }
   }
 }

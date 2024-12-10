@@ -15,7 +15,7 @@ import fetch from "node-fetch";
 // import pdfParse from 'pdf-parse';
 // import OpenAI from "openai";
 
-export const processDocument = action({
+{/* export const processDocument = action({
 	args: {
 	  documentId: v.id("projects"),
 	},
@@ -86,18 +86,16 @@ export const processDocument = action({
 
 	  return { success: true };
 	},
-  });
+  }); */}
 
 // This mutation updates the document's chunks and embeddings
 export const updateDocumentEmbeddings = mutation({
 	args: {
 	  documentId: v.id("projects"),
-	  documentChunks: v.array(v.string()),
 	  documentEmbeddings: v.array(v.float64()),
 	},
 	handler: async (ctx, args) => {
 	  await ctx.db.patch(args.documentId, {
-		documentChunks: args.documentChunks,
 		documentEmbeddings: args.documentEmbeddings,
 	  });
 	},
@@ -171,15 +169,18 @@ export const getFileUrl = mutation({
 	},
   });
 
-export const updateDocumentContent = mutation({
+  // Update Document Content
+  export const updateDocumentContent = mutation({
 	args: {
 	  documentId: v.id("projects"),
 	  documentContent: v.string(),
+	  documentChunks: v.array(v.string()), // Add this line
 	},
-	handler: async (ctx, { documentId, documentContent }) => {
+	handler: async (ctx, { documentId, documentContent, documentChunks }) => {
 	  // Ensure user authentication or implement access controls if needed
 	  await ctx.db.patch(documentId, {
 		documentText: documentContent,
+		documentChunks: documentChunks, // Add this line
 		isProcessed: false, // reset or ensure it's false if needed
 	  });
 	},
