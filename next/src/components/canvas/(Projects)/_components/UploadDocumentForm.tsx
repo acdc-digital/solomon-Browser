@@ -13,6 +13,8 @@ import { useAction, useMutation } from "convex/react"
 import { api } from "../../../../../convex/_generated/api"
 import { Id } from "../../../../../convex/_generated/dataModel"
 
+export const runtime = "nodejs";
+
 interface UploadDocumentFormProps {
   onUpload: () => void;
   projectId: Id<"projects">;

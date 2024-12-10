@@ -1,8 +1,11 @@
-// /Users/matthewsimon/Documents/Github/solomon-electron/next/src/app/api/parse-pdf/route.ts
 // /src/app/api/parse-pdf/route.ts
 
 import { NextResponse } from 'next/server';
-import convex from '@/lib/convexClient'; // Adjust the import path as necessary
+import convex from '@/lib/convexClient';
+import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
+import fs from 'fs';
+import path from 'path';
+import fetch from 'node-fetch'; // Ensure node-fetch is installed
 
 export const runtime = "nodejs";
 
@@ -44,14 +47,74 @@ export async function POST(request: Request) {
 
     console.log('PDF URL:', response.url);
 
-    // TODO: Implement your PDF parsing logic here using response.url
+    // **Step 2: Fetch the PDF from the URL**
+    console.log('Fetching the PDF from the URL');
+    const pdfResponse = await fetch(response.url);
 
-    return NextResponse.json(
-      { pdfUrl: response.url },
-      { status: 200 }
-    );
+    if (!pdfResponse.ok) {
+      console.error('Failed to fetch PDF:', pdfResponse.statusText);
+      return NextResponse.json(
+        { error: 'Failed to fetch PDF' },
+        { status: 500 }
+      );
+    }
+
+    // **Step 3: Parse the PDF to Extract Text**
+    console.log('Parsing the PDF to extract text');
+
+    // Download and save the PDF to a temporary file
+    const tempDir = path.join(process.cwd(), 'temp');
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir);
+    }
+    const tempFilePath = path.join(tempDir, `${fileId}.pdf`);
+
+    const arrayBuffer = await pdfResponse.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    fs.writeFileSync(tempFilePath, buffer);
+    console.log('PDF saved to:', tempFilePath);
+
+    // Parse the PDF using PDFLoader
+    const loader = new PDFLoader(tempFilePath);
+    const docs = await loader.load();
+
+    if (!docs.length) {
+      throw new Error("No content extracted from the document.");
+    }
+    console.log("Loaded docs:", docs.length);
+
+    // Extract text from docs
+    const extractedText = docs.map(doc => doc.pageContent).join('\n');
+    console.log('Extracted Text:', extractedText);
+
+    // Clean up: Delete the temporary file
+    fs.unlinkSync(tempFilePath);
+    console.log('Temporary file deleted.');
+
+    // **Step 4: Update the Document Content in the Database**
+    console.log('Updating document content in the database');
+    try {
+      const updateResponse = await convex.mutation('projects:updateDocumentContent', {
+        documentId,
+        documentContent: extractedText,
+      });
+
+      console.log('Update Response:', updateResponse);
+
+      return NextResponse.json(
+        { pdfUrl: response.url, text: extractedText },
+        { status: 200 }
+      );
+    } catch (updateError: any) {
+      console.error('Error updating document content:', updateError);
+      return NextResponse.json(
+        { error: 'Error updating document content' },
+        { status: 500 }
+      );
+    }
+
   } catch (error: any) {
-    console.error('Error fetching PDF URL:', error);
+    console.error('Error handling POST request:', error);
     return NextResponse.json(
       { error: error.message || 'Internal Server Error' },
       { status: 500 }
