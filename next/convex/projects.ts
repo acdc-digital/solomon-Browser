@@ -147,9 +147,9 @@ export const createDocument = mutation({
     });
 
 	// Schedule the document processing as an internal action
-    await ctx.scheduler.runAfter(0, api.projects.processDocument, {
+    {/* await ctx.scheduler.runAfter(0, api.projects.processDocument, {
 		documentId,
-	  });
+	  }); */}
 
     return { documentId };
 			  // Schedule a job to process the document
@@ -159,15 +159,27 @@ export const createDocument = mutation({
     },
 });
 
+// Get signed URL for a file
+export const getFileUrl = mutation({
+	args: { fileId: v.id("_storage") },
+	handler: async (ctx, { fileId }) => {
+	  const url = await ctx.storage.getUrl(fileId);
+	  if (!url) {
+		throw new Error("Failed to retrieve file URL from storage.");
+	  }
+	  return { url };
+	},
+  });
+
 export const updateDocumentContent = mutation({
 	args: {
 	  documentId: v.id("projects"),
 	  documentContent: v.string(),
 	},
-	handler: async (ctx, args) => {
+	handler: async (ctx, { documentId, documentContent }) => {
 	  // Ensure user authentication or implement access controls if needed
-	  await ctx.db.patch(args.documentId, {
-		documentText: args.documentContent,
+	  await ctx.db.patch(documentId, {
+		documentText: documentContent,
 		isProcessed: false, // reset or ensure it's false if needed
 	  });
 	},
@@ -203,123 +215,6 @@ export const getDocuments = query({
 	return await ctx.db.query('projects').collect()
     },
 })
-
-{/*
-// Generate Embeddings Function
-async function generateEmbeddings(chunks: string[], ctx: MutationCtx): Promise<number[][]> {
-	// Initialize OpenAI client
-	const openai = new OpenAI();
-
-	try {
-	  const response = await openai.embeddings.create({
-		model: "text-embedding-ada-002",
-		input: chunks,
-	  });
-
-	  // Extract embeddings from the response
-	  const embeddings = response.data.map((item) => item.embedding);
-	  return embeddings;
-	} catch (error) {
-	  console.error("Error generating embeddings:", error);
-	  throw new Error("Failed to generate embeddings.");
-	}
-  }
-// Get Embedding Function
-async function getEmbedding(text: string, ctx: MutationCtx): Promise<number[]> {
-	// Initialize OpenAI client
-	const openai = new OpenAI();
-
-	try {
-	  const response = await openai.embeddings.create({
-		model: "text-embedding-ada-002",
-		input: text,
-	  });
-
-	  // Extract the embedding from the response
-	  const embedding = response.data[0].embedding;
-	  return embedding;
-	} catch (error) {
-	  console.error("Error generating embedding:", error);
-	  throw new Error("Failed to generate embedding.");
-	}
-  }
-
-// Extract Text Function using pdf-parse
-async function extractTextFromBuffer(buffer: Buffer): Promise<string> {
-	try {
-	  const data = await pdfParse(buffer);
-	  return data.text;
-	} catch (error) {
-	  console.error('Error extracting text from buffer:', error);
-	  throw new Error('Failed to extract text from the PDF file.');
-	}
-  }
-
-// Chunk Text Function
-function chunkText(text: string, maxChunkSize = 1000): string[] {
-	const sentences = text.match(/[^\.!\?]+[\.!\?]+/g) || [];
-	const chunks: string[] = [];
-	let chunk = "";
-
-	for (const sentence of sentences) {
-	  if (chunk.length + sentence.length > maxChunkSize) {
-		chunks.push(chunk.trim());
-		chunk = "";
-	  }
-	  chunk += sentence + " ";
-	}
-	if (chunk) {
-	  chunks.push(chunk.trim());
-	}
-	return chunks;
-  }
-
-// Store Chunks and Embeddings Function
-async function storeChunksAndEmbeddings(
-	ctx: MutationCtx,
-	documentId: Id<"projects">,
-	chunks: string[],
-	embeddings: number[][]
-  ): Promise<void> {
-	await ctx.db.patch(documentId, {
-	  documentEmbeddings: embeddings,
-	  documentChunks: chunks, // Include this if you added documentChunks to the schema
-	});
-  }
-
-export const processDocument = mutation({
-	args: {
-	  documentId: v.id("projects"),
-	},
-	handler: async (ctx, args) => {
-	  const document = await ctx.db.get(args.documentId);
-	  if (!document) {
-		throw new Error("Document not found.");
-	  }
-
-	  // Generate a download URL for the file
-	  const url = await ctx.storage.getUrl(document.fileId);
-	  if (!url) {
-		throw new Error("Failed to get URL for the document's file.");
-	  }
-
-	  // Fetch the file content
-	  const response = await fetch(url);
-	  const arrayBuffer = await response.arrayBuffer();
-	  const buffer = Buffer.from(arrayBuffer);
-
-	  // Extract text from the file (e.g., PDF)
-	  const textContent = await extractTextFromBuffer(buffer);
-
-	  // Proceed to chunking and embedding
-	  const chunks = chunkText(textContent);
-	  const embeddings = await generateEmbeddings(chunks, ctx);
-
-	  // Store chunks and embeddings in Convex
-	  await storeChunksAndEmbeddings(ctx, document._id, chunks, embeddings);
-	},
-  });
-  */}
 
 export const getDocumentsByProjectId = query({
 	args: { projectId: v.id("projects") },

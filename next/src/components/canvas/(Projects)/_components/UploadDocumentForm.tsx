@@ -59,6 +59,13 @@ export default function UploadDocumentForm({ onUpload, projectId }: UploadDocume
       parentProject: projectId,
     });
 
+    // Now call your external backend API with documentId & fileId
+    await fetch("/api/parse-pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ documentId, fileId: storageId })
+    });
+
     // Note: The `createDocument` mutation returns { documentId }
     // not { id }. So ensure you use document.documentId.
 
