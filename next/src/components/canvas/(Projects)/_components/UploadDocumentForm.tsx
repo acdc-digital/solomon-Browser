@@ -68,15 +68,6 @@ export default function UploadDocumentForm({ onUpload, projectId }: UploadDocume
       body: JSON.stringify({ documentId, fileId: storageId })
     });
 
-    // Note: The `createDocument` mutation returns { documentId }
-    // not { id }. So ensure you use document.documentId.
-
-    // Step 4: Trigger the processing of the uploaded document
-    // The processDocument expects `{ documentId }` only.
-    // await processDocument({
-    //  documentId
-    // });
-
     onUpload();
   }
 

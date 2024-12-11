@@ -11,13 +11,16 @@ import { Button } from "@/components/ui/button";
 import { AlignHorizontalDistributeCenterIcon, BoldIcon, BoltIcon, BotIcon, BotMessageSquareIcon, CodeIcon, CogIcon, FolderIcon, Heading1Icon, Heading2Icon, Heading3Icon, ItalicIcon, ListIcon, ListOrderedIcon, PilcrowIcon, SplitIcon, Strikethrough, SquareCheck, TextQuoteIcon, UnderlineIcon, HighlighterIcon, LinkIcon, ImageIcon, TableIcon } from 'lucide-react';
 import { useEditorStore } from "@/lib/store/editorStore";
 import { UploadDocumentButton } from "./_components/FileTable";
-import useChatStore from '@/lib/store/chatStore';
 import { FileList } from "./_components/FileList";
+import { DocumentData } from "@/types/DocumentData";
+
+import useChatStore from '@/lib/store/chatStore';
+import FilePreview from "./_components/FilePreview";
 
 // Fetch project data based on projectId
 const Projects: React.FC<{ projectId: string }> = ({ projectId }) => {
   // Destructure activateFiles from the store
-  const { activeView, setActiveView } = useEditorStore();
+  const { activeView, setActiveView, setSelectedFile, selectedFile } = useEditorStore();
 
   // Destructure activateChat from the store
   const { activateChat } = useChatStore();
@@ -89,13 +92,13 @@ const Projects: React.FC<{ projectId: string }> = ({ projectId }) => {
                     <FolderIcon className="mr-2 h-4 w-4" />
                   Files
               </Button>
-              <Button
+              {/* <Button
                 className="text-gray-600"
                 variant="outline"
                 >
                 <SquareCheck className="mr-2 h-5 w-5" />
                 Tasks
-              </Button>
+              </Button> */}
               <Button
                 className="text-gray-600"
                 variant="outline"
@@ -123,6 +126,12 @@ const Projects: React.FC<{ projectId: string }> = ({ projectId }) => {
               <FileList projectId={projectId} />
             </div>
           )}
+          {/* Preview */}
+          {activeView === "preview" && selectedFile && (
+            <div className="ml-3 mr-6 border-b border-l border-r">
+              <FilePreview />
+            </div>
+      )}
       </div>
     )
 };

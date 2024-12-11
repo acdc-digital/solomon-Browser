@@ -40,7 +40,7 @@ interface CanvasProps {
                 onAdminClick={() => setActiveComponent('Admin')}
                 onProjectsClick={() => setActiveComponent('Projects')}
                 onFilesClick={() => setActiveComponent('Files')}
-                onTasksClick={() => setActiveComponent('Tasks')}
+                // onTasksClick={() => setActiveComponent('Tasks')}
                 onDocsClick={() => setActiveComponent('Docs')}
                 /> 
                 {renderComponent()}
