@@ -174,13 +174,26 @@ export const getFileUrl = mutation({
 	args: {
 	  documentId: v.id("projects"),
 	  documentContent: v.string(),
-	  documentChunks: v.array(v.string()), // Add this line
 	},
-	handler: async (ctx, { documentId, documentContent, documentChunks }) => {
+	handler: async (ctx, { documentId, documentContent }) => {
 	  // Ensure user authentication or implement access controls if needed
 	  await ctx.db.patch(documentId, {
 		documentText: documentContent,
-		documentChunks: documentChunks, // Add this line
+		isProcessed: false, // reset or ensure it's false if needed
+	  });
+	},
+  });
+
+  // Update Document Chunks
+  export const updateDocumentChunks = mutation({
+	args: {
+	  documentId: v.id("projects"),
+	  documentChunks: v.array(v.string()),
+	},
+	handler: async (ctx, { documentId, documentChunks }) => {
+	  // Ensure user authentication or implement access controls if needed
+	  await ctx.db.patch(documentId, {
+		documentChunks: documentChunks,
 		isProcessed: false, // reset or ensure it's false if needed
 	  });
 	},

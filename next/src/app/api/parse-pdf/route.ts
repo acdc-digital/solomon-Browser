@@ -9,6 +9,9 @@ import { CacheBackedEmbeddings } from "langchain/embeddings/cache_backed";
 import { OpenAIEmbeddings } from "@langchain/openai";
 import { ConvexKVStore } from "@langchain/community/storage/convex";
 import { ConvexVectorStore } from "@langchain/community/vectorstores/convex";
+// import { CharacterTextSplitter } from "langchain/text_splitter";
+// If you don’t need semantic splitting, use CharacterTextSplitter which splits purely based on character count.
+
 import fs from 'fs';
 import path from 'path';
 import fetch from 'node-fetch'; // Ensure node-fetch is installed
@@ -101,27 +104,39 @@ export async function POST(request: Request) {
     const textSplitter = new RecursiveCharacterTextSplitter({
       chunkSize: 1000,    // Adjust based on your needs
       chunkOverlap: 200,  // Adjust based on your needs
+      separators: ["\n\n", "\n", " ", ""],
     });
 
     const splitDocs = await textSplitter.splitDocuments(docs);
-    const docChunks = splitDocs.map((doc) => doc.pageContent);
+    let docChunks = splitDocs.map((doc) => doc.pageContent);
+
+    // Add numbering to each chunk
+    docChunks = docChunks.map((chunk, index) => `Chunk ${index + 1}:\n${chunk}`);
 
     console.log('Number of Chunks:', docChunks.length);
+    console.log('Preview of first chunk:', docChunks[0]);
 
-    // **Step 5: Update the Document Content in the Database**
+    // **Step 5: Update the Document Content and Chunks**
     console.log('Updating document content in the database');
     try {
-      const updateResponse = await convex.mutation('projects:updateDocumentContent', {
+      // First, update the text content only
+      const contentUpdateResponse = await convex.mutation('projects:updateDocumentContent', {
         documentId,
         documentContent: extractedText,
-        documentChunks: docChunks, // Include the chunks
       });
+      console.log('Content Update Response:', contentUpdateResponse);
 
-      console.log('Update Response:', updateResponse);
+      // Next, update the chunks separately
+      const chunksUpdateResponse = await convex.mutation('projects:updateDocumentChunks', {
+        documentId,
+        documentChunks: docChunks,
+      });
+      console.log('Chunks Update Response:', chunksUpdateResponse);
+
     } catch (updateError: any) {
-      console.error('Error updating document content:', updateError);
+      console.error('Error updating document content or chunks:', updateError);
       return NextResponse.json(
-        { error: 'Error updating document content' },
+        { error: 'Error updating document content or chunks' },
         { status: 500 }
       );
     }
@@ -184,4 +199,4 @@ export async function POST(request: Request) {
       console.log('Temporary file deleted.');
     }
   }
-}
+};

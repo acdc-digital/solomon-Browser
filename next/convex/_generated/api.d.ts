@@ -17,6 +17,7 @@ import type {
 import type * as chat from "../chat.js";
 import type * as langchain_db from "../langchain/db.js";
 import type * as projects from "../projects.js";
+import type * as search from "../search.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -30,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   chat: typeof chat;
   "langchain/db": typeof langchain_db;
   projects: typeof projects;
+  search: typeof search;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,
