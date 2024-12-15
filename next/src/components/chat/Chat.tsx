@@ -5,12 +5,16 @@
 import { useAction, useQuery } from 'convex/react';
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../../convex/_generated/api';
+import { Id } from '../../../convex/_generated/dataModel';
 
-export default function Chat() {
+export default function Chat({ projectId }) {
   const handleUserAction = useAction(api.chat.handleUserAction);
-  const entries = useQuery(api.chat.getAllEntries);
+  const entries = useQuery(api.chat.getAllEntries, { projectId });
   const [message, setMessage] = useState('');
   const messagesEndRef = useRef(null);
+  const onSubmit = (message: string) => {
+    handleUserAction({ message, projectId });
+  };
 
   // Auto-scroll to the bottom when new messages arrive
   useEffect(() => {
@@ -40,7 +44,7 @@ export default function Chat() {
         onSubmit={(e) => {
           e.preventDefault();
           if (message.trim() === '') return; // Prevent empty messages
-          handleUserAction({ message });
+          handleUserAction({ message, projectId });
           setMessage('');
         }}
       >

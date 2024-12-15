@@ -37,5 +37,7 @@ export default defineSchema({
   chat: defineTable({
     input: v.string(),
     response: v.string(),
-  }),
+    projectId: v.optional(v.id("projects")),
+  })
+  .index("by_project", ["projectId"])
 });

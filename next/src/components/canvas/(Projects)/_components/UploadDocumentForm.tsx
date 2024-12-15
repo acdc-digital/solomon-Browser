@@ -29,7 +29,6 @@ const formSchema = z.object({
 export default function UploadDocumentForm({ onUpload, projectId }: UploadDocumentFormProps) {
   const createDocument = useMutation(api.projects.createDocument);
   const generateUploadUrl = useMutation(api.projects.generateUploadUrl);
-  const processDocument = useAction(api.projects.processDocument);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),

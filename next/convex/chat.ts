@@ -12,19 +12,21 @@ const openai = new OpenAI();
 export const handleUserAction = action({
     args: {
         message: v.string(),
+        projectId: v.id("projects"),
     },
-    handler: async (ctx, args) => {
+    handler: async (ctx, { message, projectId }) => {
         const completion = await openai.chat.completions.create({
-            messages: [{ role: 'user', content: args.message }],
+            messages: [{ role: 'user', content: message }],
             model: 'gpt-3.5-turbo',
           });
 
-          const input = args.message;
+          const input = message;
           const response = completion.choices[0].message.content ?? '';
 
           await ctx.runMutation(api.chat.insertEntry, {
             input,
             response,
+            projectId,
           });
 
         return completion;
@@ -35,18 +37,26 @@ export const insertEntry = mutation({
     args: {
         input: v.string(),
         response: v.string(),
+        projectId: v.id("projects"),
     },
-    handler: async (ctx, args) => {
+    handler: async (ctx, { input, response, projectId }) => {
         await ctx.db.insert("chat", {
-            input: args.input,
-            response: args.response,
+            input,
+            response,
+            projectId,
         });
     },
 });
 
 export const getAllEntries = query({
-    handler: async (ctx) => {
-        const entries = await ctx.db.query("chat").collect();
-        return entries;
+    args: {
+      projectId: v.id("projects"), // or v.optional(v.id("projects")) if needed
     },
-});
+    handler: async (ctx, { projectId }) => {
+      // Filter chat messages for the given projectId
+      const entries = await ctx.db.query("chat")
+        .withIndex("by_project", q => q.eq("projectId", projectId))
+        .collect();
+      return entries;
+    },
+  });

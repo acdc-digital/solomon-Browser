@@ -17,6 +17,7 @@ import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Trashbox } from '@/components/sidebar/Trashbox';
 import { useSearch } from '@/hooks/use-search';
+import { useEditorStore } from '@/lib/store/editorStore';
 
 interface SidebarProps {
     onProjectSelect: (projectId: string) => void;
@@ -24,6 +25,7 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ onProjectSelect }) => {
     const search = useSearch();
+    const { setProjectId } = useEditorStore();
 
     // State to toggle the sidebar width
     const [isExpanded, setIsExpanded] = useState(true);
@@ -34,16 +36,25 @@ const Sidebar: React.FC<SidebarProps> = ({ onProjectSelect }) => {
         setIsExpanded(!isExpanded);
       };
 
-      const create = useMutation(api.projects.create); 
+    const create = useMutation(api.projects.create); 
 
-      const handleCreate = () => {
-        const promise = create ({ title: " New Project" });
+    const handleCreate = () => {
+      const promise = create ({ title: " New Project" });
 
         toast.promise(promise, {
             loading: "Creating a new Project...",
             success: "New Project Created!",
             error: "Failed to Create a new Project"
         });
+      };
+
+    // Handle project selection
+    const handleProjectSelect = (projectId: string) => {
+    // Set the projectId in the editor store as soon as a project is selected
+        setProjectId(projectId as any); // Replace 'as any' with proper typing if projectId is Id<"projects">
+
+    // Call the parent prop with the selected projectId
+        onProjectSelect(projectId);
       };
 
     return (
@@ -89,7 +100,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onProjectSelect }) => {
             {/* Sidebar content goes here */}
             <div>
                 <div className='flex flex-grow flex-col overflow-y-auto'>
-                    <ProjectList onProjectSelect={onProjectSelect}/>
+                    <ProjectList onProjectSelect={handleProjectSelect}/>
                 </div>
             </div>
 

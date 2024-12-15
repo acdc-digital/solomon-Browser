@@ -7,4 +7,5 @@ export interface DocumentData {
   _id: Id<"projects">;
   documentTitle: string;
   createdAt: Date;
+  fileId: Id<"_storage">;
 }

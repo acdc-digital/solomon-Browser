@@ -3,21 +3,22 @@
 
 import React from "react";
 import { useQuery } from "convex/react";
-import { Id } from "../../../../../convex/_generated/dataModel";
 import { api } from "../../../../../convex/_generated/api";
-import { Table, TableBody, TableHead, TableHeader, TableRow, TableCell } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableHead,
+  TableHeader,
+  TableRow,
+  TableCell,
+} from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
+import { useEditorStore } from "@/lib/store/editorStore"; // Updated import path
 import { DocumentData } from "@/types/DocumentData"; // Import DocumentData type
-import { useEditorStore } from "@/lib/store/editorStore";
-// import { useFilePreviewStore } from "@/lib/store/useFilePreviewStore";
 
-import FilePreview from "./FilePreview";
-
-export const FileList: React.FC<{ projectId: Id<"projects"> }> = ({ projectId }) => {
+export const FileList: React.FC<{ projectId: string }> = ({ projectId }) => {
   const documents = useQuery(api.projects.getDocumentsByProjectId, { projectId });
-  const activeView = useEditorStore((state) => state.activeView);
-  const setActiveView = useEditorStore((state) => state.setActiveView);
-  const setSelectedFile = useEditorStore((state) => state.setSelectedFile);
+  const { setActiveView, setSelectedFile } = useEditorStore();
 
   if (documents === undefined) {
     return <p>Loading documents...</p>;
@@ -33,6 +34,7 @@ export const FileList: React.FC<{ projectId: Id<"projects"> }> = ({ projectId })
       ...doc,
       fileType,
       formattedCreatedAt,
+      fileId: doc.fileId, // Ensure this field exists
     };
   });
 
@@ -43,7 +45,6 @@ export const FileList: React.FC<{ projectId: Id<"projects"> }> = ({ projectId })
 
   return (
     <div className="relative">
-      {/* Optional: Add your 'Add File' button here */}
       <Table>
         <TableHeader className="border-t">
           <TableRow>
