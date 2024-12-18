@@ -15,6 +15,46 @@ import fetch from "node-fetch";
 // import pdfParse from 'pdf-parse';
 // import OpenAI from "openai";
 
+/**
+ * Query to retrieve the parentProjectId for a given documentId.
+ *
+ * @param ctx - Convex server context
+ * @param documentId - The ID of the document
+ * @returns The parentProjectId if found, otherwise null
+ */
+export const getParentProjectId = query({
+	args: {
+	  documentId: v.id("projects"),
+	},
+	handler: async (
+	  ctx,
+	  { documentId }: { documentId: Id<"projects"> }
+	): Promise<Id<"projects"> | null> => {
+	  console.log(`Fetching document with ID: ${documentId}`);
+
+	  // Fetch the document directly by its ID
+	  const document = await ctx.db.get(documentId);
+
+	  if (!document) {
+		console.error(`Document with ID ${documentId} not found.`);
+		return null;
+	  }
+
+	  if (document.type !== "document") {
+		console.error(`Document with ID ${documentId} is not of type 'document'.`);
+		return null;
+	  }
+
+	  if (!document.parentProject) {
+		console.error(`Document with ID ${documentId} does not have a parentProject.`);
+		return null;
+	  }
+
+	  console.log(`Parent Project ID: ${document.parentProject}`);
+	  return document.parentProject as Id<"projects">;
+	},
+  });
+
 {/* export const processDocument = action({
 	args: {
 	  documentId: v.id("projects"),
@@ -89,7 +129,7 @@ import fetch from "node-fetch";
   }); */}
 
 // This mutation updates the document's chunks and embeddings
-export const updateDocumentEmbeddings = mutation({
+{/* export const updateDocumentEmbeddings = mutation({
 	args: {
 	  documentId: v.id("projects"),
 	  documentEmbeddings: v.array(v.float64()),
@@ -99,7 +139,7 @@ export const updateDocumentEmbeddings = mutation({
 		documentEmbeddings: args.documentEmbeddings,
 	  });
 	},
-  });
+  }); */}
 
 export const createDocument = mutation({
     args: {
@@ -135,7 +175,6 @@ export const createDocument = mutation({
 			  // Document Fields
 			  documentTitle: args.documentTitle,
 			  fileId: args.fileId,
-			  documentEmbeddings: args.documentEmbeddings,
 
 			  // Project Fields (set to undefined)
 			  title: undefined,
@@ -178,14 +217,13 @@ export const getFileUrl = mutation({
 	handler: async (ctx, { documentId, documentContent }) => {
 	  // Ensure user authentication or implement access controls if needed
 	  await ctx.db.patch(documentId, {
-		documentText: documentContent,
 		isProcessed: false, // reset or ensure it's false if needed
 	  });
 	},
   });
 
   // Update Document Chunks
-  export const updateDocumentChunks = mutation({
+  {/* export const updateDocumentChunks = mutation({
 	args: {
 	  documentId: v.id("projects"),
 	  documentChunks: v.array(v.string()),
@@ -197,7 +235,7 @@ export const getFileUrl = mutation({
 		isProcessed: false, // reset or ensure it's false if needed
 	  });
 	},
-  });
+  }); */}
 
 // Additional helper functions you'll need to add to your Convex schema
 export const getDocument = query({
@@ -216,6 +254,28 @@ export const getDocument = query({
 	  await ctx.db.patch(args.documentId, {
 		isProcessed: args.isProcessed,
 		processedAt: new Date().toISOString(),
+	  });
+	},
+  });
+
+// Mutation to update processing status
+export const updateProcessingStatus = mutation({
+	args: {
+	  documentId: v.id("projects"),
+	  isProcessed: v.boolean(),
+	  processedAt: v.string(),
+	},
+	handler: async (
+	  ctx,
+	  { documentId, isProcessed, processedAt }: {
+		documentId: Id<"projects">;
+		isProcessed: boolean;
+		processedAt: string;
+	  }
+	) => {
+	  await ctx.db.patch(documentId, {
+		isProcessed,
+		processedAt,
 	  });
 	},
   });
@@ -374,7 +434,6 @@ export const create = mutation({
 			// Document Fields
 			documentTitle: args.documentTitle,
 			fileId: args.fileId,
-			documentEmbeddings: args.documentEmbeddings,
 			isProcessed: false,
 		});
 	}

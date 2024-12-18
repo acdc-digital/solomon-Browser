@@ -5,12 +5,7 @@ import { NextResponse } from 'next/server';
 import convex from '@/lib/convexClient';
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
-import { CacheBackedEmbeddings } from "langchain/embeddings/cache_backed";
 import { OpenAIEmbeddings } from "@langchain/openai";
-import { ConvexKVStore } from "@langchain/community/storage/convex";
-import { ConvexVectorStore } from "@langchain/community/vectorstores/convex";
-// import { CharacterTextSplitter } from "langchain/text_splitter";
-// If you don’t need semantic splitting, use CharacterTextSplitter which splits purely based on character count.
 
 import fs from 'fs';
 import path from 'path';
@@ -22,11 +17,11 @@ export async function POST(request: Request) {
   let tempFilePath = '';
 
   try {
-    // Parse the incoming JSON body
+    // **Step 1: Parse the Incoming JSON Body**
     const { documentId, fileId } = await request.json();
     console.log('Received POST request with:', { documentId, fileId });
 
-    // Validate input
+    // **Step 2: Validate Input**
     if (!documentId || !fileId) {
       console.error('Validation failed: Missing documentId or fileId');
       return NextResponse.json(
@@ -35,7 +30,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validate fileId
+    // **Step 3: Validate fileId**
     if (typeof fileId !== 'string' || fileId.trim() === '') {
       console.error('Invalid fileId provided.');
       return NextResponse.json(
@@ -44,7 +39,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Invoke the Convex mutation to get the PDF URL
+    // **Step 4: Invoke the Convex Mutation to Get the PDF URL**
     console.log('Invoking Convex mutation: projects:getFileUrl');
     const response = await convex.mutation('projects:getFileUrl', { fileId });
 
@@ -58,7 +53,7 @@ export async function POST(request: Request) {
 
     console.log('PDF URL:', response.url);
 
-    // **Step 2: Fetch the PDF from the URL**
+    // **Step 5: Fetch the PDF from the URL**
     console.log('Fetching the PDF from the URL');
     const pdfResponse = await fetch(response.url);
 
@@ -70,7 +65,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // **Step 3: Parse the PDF to Extract Text**
+    // **Step 6: Parse the PDF to Extract Text**
     console.log('Parsing the PDF to extract text');
 
     // Download and save the PDF to a temporary file
@@ -98,7 +93,7 @@ export async function POST(request: Request) {
     const extractedText = docs.map(doc => doc.pageContent).join('\n');
     console.log('Extracted Text:', extractedText);
 
-    // **Step 4: Split the Document into Chunks**
+    // **Step 7: Split the Document into Chunks**
     console.log('Splitting the document into chunks');
 
     const textSplitter = new RecursiveCharacterTextSplitter({
@@ -116,32 +111,52 @@ export async function POST(request: Request) {
     console.log('Number of Chunks:', docChunks.length);
     console.log('Preview of first chunk:', docChunks[0]);
 
-    // **Step 5: Update the Document Content and Chunks**
-    console.log('Updating document content in the database');
-    try {
-      // First, update the text content only
-      const contentUpdateResponse = await convex.mutation('projects:updateDocumentContent', {
-        documentId,
-        documentContent: extractedText,
-      });
-      console.log('Content Update Response:', contentUpdateResponse);
+    // **Step 8: Retrieve parentProjectId from documentId**
+    console.log('Retrieving parentProjectId from documentId:', documentId);
+    const parentProjectId = await convex.query('projects:getParentProjectId', { documentId });
 
-      // Next, update the chunks separately
-      const chunksUpdateResponse = await convex.mutation('projects:updateDocumentChunks', {
-        documentId,
-        documentChunks: docChunks,
-      });
-      console.log('Chunks Update Response:', chunksUpdateResponse);
-
-    } catch (updateError: any) {
-      console.error('Error updating document content or chunks:', updateError);
+    if (!parentProjectId) {
+      console.error(`No parentProjectId found for documentId: ${documentId}`);
       return NextResponse.json(
-        { error: 'Error updating document content or chunks' },
+        { error: 'Invalid documentId: parentProjectId not found.' },
+        { status: 400 }
+      );
+    }
+
+    console.log('Retrieved parentProjectId:', parentProjectId);
+
+    // **Step 9: Insert Chunks into the `chunks` Table**
+    console.log('Inserting chunks into the database');
+    try {
+      // Batch insert chunks for efficiency
+      const chunkDocs = docChunks.map((chunk, index) => ({
+        pageContent: chunk,
+        chunkNumber: index + 1,
+      }));
+
+      await convex.mutation('chunks:insertChunks', {
+        parentProjectId, // Updated: Use parentProjectId instead of projectId
+        chunks: chunkDocs,
+      });
+
+      console.log('All chunks inserted successfully.');
+
+      // Optionally, update the document's `isProcessed` and `processedAt` fields
+      await convex.mutation('projects:updateProcessingStatus', {
+        documentId,
+        isProcessed: true,
+        processedAt: new Date().toISOString(),
+      });
+
+    } catch (insertError: any) {
+      console.error('Error inserting chunks:', insertError);
+      return NextResponse.json(
+        { error: 'Error inserting chunks' },
         { status: 500 }
       );
     }
 
-    // **Step 6: Generate and Store Embeddings**
+    // **Step 10: Generate and Store Embeddings for Chunks**
     console.log('Generating embeddings for the chunks');
 
     // Initialize OpenAIEmbeddings with your API key
@@ -153,21 +168,19 @@ export async function POST(request: Request) {
     const chunkEmbeddings: number[][] = await openAIEmbeddings.embedDocuments(docChunks);
     console.log('Generated Embeddings:', chunkEmbeddings.length);
 
-    // Average embeddings into one representative vector
-    const documentEmbedding: number[] = chunkEmbeddings[0].map((_, i) =>
-      chunkEmbeddings.reduce((sum, vec) => sum + vec[i], 0) / chunkEmbeddings.length
-    );
-    console.log("Averaged document embedding:", documentEmbedding);
-
-    // **Step 7: Update the Document with Embeddings in the Database**
-    console.log('Updating document embeddings in the database');
+    // **Step 11: Update the Embeddings for Each Chunk in the Database**
+    console.log('Updating chunk embeddings in the database');
     try {
-      const embeddingsUpdateResponse = await convex.mutation('projects:updateDocumentEmbeddings', {
-        documentId,
-        documentEmbeddings: documentEmbedding, // Correct: Passing number[] instead of number[][]
-      });
+      // Perform concurrent updates
+      await Promise.all(chunkEmbeddings.map((embedding, index) =>
+        convex.mutation('chunks:updateChunkEmbedding', {
+          parentProjectId, // Updated: Use parentProjectId instead of projectId
+          chunkNumber: index + 1,
+          embedding,
+        })
+      ));
 
-      console.log('Embeddings Update Response:', embeddingsUpdateResponse);
+      console.log('All chunk embeddings updated successfully.');
 
       return NextResponse.json(
         {
@@ -179,9 +192,9 @@ export async function POST(request: Request) {
         { status: 200 }
       );
     } catch (embeddingsError: any) {
-      console.error('Error updating embeddings:', embeddingsError);
+      console.error('Error updating chunk embeddings:', embeddingsError);
       return NextResponse.json(
-        { error: 'Error updating embeddings' },
+        { error: 'Error updating chunk embeddings' },
         { status: 500 }
       );
     }
@@ -199,4 +212,4 @@ export async function POST(request: Request) {
       console.log('Temporary file deleted.');
     }
   }
-};
+}

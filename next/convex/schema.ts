@@ -1,11 +1,13 @@
 // Schema 
 // /Users/matthewsimon/Documents/GitHub/solomon-electron/solomon-electron/next/convex/schema.ts
 
+// /Users/matthewsimon/Documents/GitHub/solomon-electron/solomon-electron/next/convex/schema.ts
+
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
-  // Default Schema for Projects 
+  // Schema for Projects
   projects: defineTable({
     type: v.string(), // 'project' or 'document'
     // Projects Fields
@@ -20,24 +22,33 @@ export default defineSchema({
     // Document Fields
     documentTitle: v.optional(v.string()),
     fileId: v.optional(v.string()),
-    documentText: v.optional(v.string()),
-    documentEmbeddings: v.optional(v.array(v.float64())),
-    documentChunks: v.optional(v.array(v.string())),
     isProcessed: v.boolean(),
     processedAt: v.optional(v.string()),
   })
-  .index("by_user", ["userId"])
-  .index("by_user_parent", ["userId", "parentProject"])
-  .vectorIndex("byEmbedding", {
-    vectorField: "documentEmbeddings",
-    dimensions: 1536,
-  }),
-  
+    .index("by_user", ["userId"])
+    .index("by_user_parent", ["userId", "parentProject"]),
+
+  // Schema for Chunks
+  chunks: defineTable({
+    projectId: v.id("projects"), // Reference to the parent project
+    pageContent: v.string(),
+    metadata: v.optional(v.object({})), // Allow any object
+    embedding: v.optional(v.array(v.float64())), // Optional: Store individual chunk embeddings
+    chunkNumber: v.optional(v.number()),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_project_and_chunkNumber", ["projectId", "chunkNumber"]) // **New Composite Index**
+    .vectorIndex("byEmbedding", {
+      vectorField: "embedding",
+      dimensions: 1536,
+      filterFields: ["projectId"],
+    }),
+
   // Schema for Chat
   chat: defineTable({
     input: v.string(),
     response: v.string(),
     projectId: v.optional(v.id("projects")),
   })
-  .index("by_project", ["projectId"])
+    .index("by_project", ["projectId"]),
 });

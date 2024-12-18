@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     }
 
     // Call the Convex action
-    const results = await convex.action(api.search.search, { query, projectId });
+    const results = await convex.action(api.search.searchChunks, { query, projectId });
 
     return NextResponse.json({ results }, { status: 200 });
   } catch (error: any) {

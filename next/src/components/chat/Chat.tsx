@@ -27,7 +27,7 @@ export default function Chat({ projectId }: { projectId: string }) { // projectI
   return (
     <div className="flex flex-col">
       {/* Chat Display */}
-      <div className="bg-gray-100 rounded-xl h-[650px] border border-gray-400 overflow-y-auto mt-2 mb-4">
+      <div className="bg-gray-100 rounded-xl h-[650px] border border-gray-400 overflow-y-auto mt-2 mb-4 ml-2 mr-2">
         {entries?.map((entry) => (
           <div key={entry._id} className="flex flex-col gap-2 text-black p-2">
             <div className="font-semibold">You:</div>
