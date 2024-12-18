@@ -14,7 +14,7 @@ const Chat: React.FC = () => {
     };
 
     return (
-        <div className='flex flex-col w-[27%] h-screen border-l'>
+        <div className='flex flex-col w-[24%] h-screen border-l'>
             <ChatHeader title="Chat" />
             <ChatLayout />
         </div>

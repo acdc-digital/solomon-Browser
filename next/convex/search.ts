@@ -56,7 +56,7 @@ export const fetchChunks = internalQuery({
 /**
  * Action to search for similar chunks based on a user query and generate a response.
  */
-export const searchChunks = action({
+{/* export const searchChunks = action({
   args: {
     query: v.string(),
     projectId: v.id("projects"),
@@ -115,11 +115,11 @@ export const searchChunks = action({
         "I'm sorry, I couldn't generate a response.";
 
       // Step 6: Optionally, store the chat interaction in the 'chat' table
-      {/* await ctx.db.insert("chat", {
+      await ctx.db.insert("chat", {
         input: query,
         response: response,
         projectId: projectId,
-      }); */}
+      });
 
       return { response };
     } catch (error) {
@@ -127,7 +127,7 @@ export const searchChunks = action({
       throw new Error("An error occurred while processing your request.");
     }
   },
-});
+}); */}
 
 // Define the getSimilarChunks action
 export const getSimilarChunks = action({
