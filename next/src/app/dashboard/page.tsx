@@ -20,7 +20,7 @@ const DashboardPage: React.FC = () => {
 
   return (
     <DashboardLayout >
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 h-screen pb-2">
           <Sidebar onProjectSelect={handleProjectSelection} />
           <Canvas activeProjectId={activeProjectId} />
           <Chat />

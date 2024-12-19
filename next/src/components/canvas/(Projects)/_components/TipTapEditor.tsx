@@ -1,5 +1,5 @@
-// TipTap Editor 
-// /Users/matthewsimon/Documents/github/solomon-electron/solomon-electron/next/src/components/canvas/(Projects)/_components/TipTapEditor.tsx
+// TipTapEditor.tsx
+// /Users/matthewsimon/Documents/Github/solomon-electron/next/src/components/canvas/(Projects)/_components/TipTapEditor.tsx
 
 import React from 'react';
 import {
@@ -19,7 +19,6 @@ import {
   AlignLeftIcon,
   AlignCenterIcon,
   AlignRightIcon,
-  HeadingIcon,
   Heading1Icon,
   Heading2Icon,
   Heading3Icon,
@@ -38,15 +37,17 @@ import TextAlign from '@tiptap/extension-text-align';
 import BulletList from '@tiptap/extension-bullet-list';
 import OrderedList from '@tiptap/extension-ordered-list';
 import ListItem from '@tiptap/extension-list-item';
-import Heading from '@tiptap/extension-heading'
-import Placeholder from '@tiptap/extension-placeholder'
+import Heading from '@tiptap/extension-heading';
+import Placeholder from '@tiptap/extension-placeholder';
+
+import PageVisualization from './PageVisualization'; // Ensure correct import path
 
 interface TipTapEditorProps {
   onChange: (content: string) => void;
   initialContent?: string;
 }
 
-export const TipTapEditor: React.FC<TipTapEditorProps> = ({
+const TipTapEditor: React.FC<TipTapEditorProps> = ({
   onChange,
   initialContent,
 }) => {
@@ -81,7 +82,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
       }),
       Placeholder.configure({
         placeholder: 'Start typing here...',
-      })
+      }),
     ],
     content: initialContent,
     onUpdate: ({ editor }) => {
@@ -130,19 +131,21 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
     `p-1 rounded hover:bg-gray-200 ${isActive ? 'bg-gray-300' : ''}`;
 
   return (
-    <div className="flex flex-col h-full w-full">
+    <div className="flex flex-col w-full">
       {/* Editor Toolbar */}
       <div className="flex flex-wrap items-center border-b bg-gray-50 p-2 gap-x-1">
         {/* Undo and Redo */}
         <button
           onClick={() => editor.chain().focus().undo().run()}
           className={buttonClass(false)}
+          aria-label="Undo"
         >
           <UndoIcon size={18} />
         </button>
         <button
           onClick={() => editor.chain().focus().redo().run()}
           className={buttonClass(false)}
+          aria-label="Redo"
         >
           <RedoIcon size={18} />
         </button>
@@ -153,30 +156,35 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
         <button
           onClick={() => editor.chain().focus().toggleBold().run()}
           className={buttonClass(editor.isActive('bold'))}
+          aria-label="Toggle Bold"
         >
           <BoldIcon size={18} />
         </button>
         <button
           onClick={() => editor.chain().focus().toggleItalic().run()}
           className={buttonClass(editor.isActive('italic'))}
+          aria-label="Toggle Italic"
         >
           <ItalicIcon size={18} />
         </button>
         <button
           onClick={() => editor.chain().focus().toggleUnderline().run()}
           className={buttonClass(editor.isActive('underline'))}
+          aria-label="Toggle Underline"
         >
           <UnderlineIcon size={18} />
         </button>
         <button
           onClick={() => editor.chain().focus().toggleStrike().run()}
           className={buttonClass(editor.isActive('strike'))}
+          aria-label="Toggle Strikethrough"
         >
           <Strikethrough size={18} />
         </button>
         <button
           onClick={() => editor.chain().focus().toggleHighlight().run()}
           className={buttonClass(editor.isActive('highlight'))}
+          aria-label="Toggle Highlight"
         >
           <HighlighterIcon size={18} />
         </button>
@@ -187,12 +195,14 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
         <button
           onClick={() => editor.chain().focus().toggleBulletList().run()}
           className={buttonClass(editor.isActive('bulletList'))}
+          aria-label="Toggle Bullet List"
         >
           <ListIcon size={18} />
         </button>
         <button
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
           className={buttonClass(editor.isActive('orderedList'))}
+          aria-label="Toggle Ordered List"
         >
           <ListOrderedIcon size={18} />
         </button>
@@ -205,6 +215,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
           className={buttonClass(
             editor.isActive({ textAlign: 'left' }) as boolean
           )}
+          aria-label="Align Left"
         >
           <AlignLeftIcon size={18} />
         </button>
@@ -213,6 +224,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
           className={buttonClass(
             editor.isActive({ textAlign: 'center' }) as boolean
           )}
+          aria-label="Align Center"
         >
           <AlignCenterIcon size={18} />
         </button>
@@ -221,6 +233,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
           className={buttonClass(
             editor.isActive({ textAlign: 'right' }) as boolean
           )}
+          aria-label="Align Right"
         >
           <AlignRightIcon size={18} />
         </button>
@@ -231,18 +244,20 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
         <button
           onClick={setLink}
           className={buttonClass(editor.isActive('link'))}
+          aria-label="Insert Link"
         >
           <LinkIcon size={18} />
         </button>
-        <button onClick={addImage} className={buttonClass(false)}>
+        <button onClick={addImage} className={buttonClass(false)} aria-label="Insert Image">
           <ImageIcon size={18} />
         </button>
-        <button onClick={addTable} className={buttonClass(false)}>
+        <button onClick={addTable} className={buttonClass(false)} aria-label="Insert Table">
           <TableIcon size={18} />
         </button>
         <button
           onClick={() => editor.chain().focus().toggleCodeBlock().run()}
           className={buttonClass(editor.isActive('codeBlock'))}
+          aria-label="Toggle Code Block"
         >
           <CodeIcon size={18} />
         </button>
@@ -252,32 +267,39 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
         {/* Headings */}
         <button
           onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-          className={buttonClass(editor.isActive('heading'))}
+          className={buttonClass(editor.isActive('heading', { level: 1 }))}
+          aria-label="Heading 1"
         >
           <Heading1Icon size={20} />
         </button>
         <button
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          className={buttonClass(editor.isActive('heading'))}
+          className={buttonClass(editor.isActive('heading', { level: 2 }))}
+          aria-label="Heading 2"
         >
           <Heading2Icon size={20} />
         </button>
         <button
           onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-          className={buttonClass(editor.isActive('heading'))}
+          className={buttonClass(editor.isActive('heading', { level: 3 }))}
+          aria-label="Heading 3"
         >
           <Heading3Icon size={20} />
         </button>
       </div>
 
-      {/* Editor Content */}
-      <div className="flex-grow overflow-y-auto bg-white">
-        <EditorContent
-          editor={editor}
-          className="h-full w-full p-4"
-          style={{ caretColor: 'black' }}
-        />
+      {/* Editor Content with Page Visualization */}
+      <div className="flex-grow overflow-y-auto bg-gray-200 p-2">
+        {/* Wrap EditorContent with PageVisualization */}
+        <PageVisualization pageSize="A4">
+          <EditorContent
+            editor={editor}
+            style={{ caretColor: 'black' }}
+          />
+        </PageVisualization>
       </div>
     </div>
   );
 };
+
+export default TipTapEditor;

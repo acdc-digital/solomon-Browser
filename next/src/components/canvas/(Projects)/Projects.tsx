@@ -6,7 +6,6 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { Title } from "./_components/Title";
-import { TipTapEditor } from "./_components/TipTapEditor";
 import { Button } from "@/components/ui/button";
 import { AlignHorizontalDistributeCenterIcon, BoldIcon, BoltIcon, BotIcon, BotMessageSquareIcon, CodeIcon, CogIcon, FolderIcon, Heading1Icon, Heading2Icon, Heading3Icon, ItalicIcon, ListIcon, ListOrderedIcon, PilcrowIcon, SplitIcon, Strikethrough, SquareCheck, TextQuoteIcon, UnderlineIcon, HighlighterIcon, LinkIcon, ImageIcon, TableIcon } from 'lucide-react';
 import { useEditorStore } from "@/lib/store/editorStore";
@@ -16,6 +15,7 @@ import { DocumentData } from "@/types/DocumentData";
 
 import useChatStore from '@/lib/store/chatStore';
 import FilePreview from "./_components/FilePreview";
+import TipTapEditor from "./_components/TipTapEditor";
 
 // Fetch project data based on projectId
 const Projects: React.FC<{ projectId: string }> = ({ projectId }) => {
@@ -62,7 +62,7 @@ const Projects: React.FC<{ projectId: string }> = ({ projectId }) => {
     }
 
   return (
-      <div className="flex flex-col">
+      <div className="flex flex-col h-screen overflow-y">
         <p className="ml-4 mt-0 text-xs text-gray-400">
           Showing details for Convex project ID: {projectId}
         </p>
@@ -112,7 +112,7 @@ const Projects: React.FC<{ projectId: string }> = ({ projectId }) => {
           {/* State-Change Components */}
           {/* Editor */}
           {activeView === "editor" && (
-            <div className="ml-3 mr-6 border-b border-l border-r">
+            <div className="flex flex-col flex-1 ml-3 mr-6 border-b border-l border-r">
             <TipTapEditor
             initialContent={project.content}
             onChange={onChange}
