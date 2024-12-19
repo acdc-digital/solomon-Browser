@@ -38,6 +38,8 @@ export default function UploadDocumentForm({ onUpload, projectId }: UploadDocume
   })
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    onUpload();
+    
     // Step 1: Generate upload URL
     const url = await generateUploadUrl();
 
@@ -66,8 +68,6 @@ export default function UploadDocumentForm({ onUpload, projectId }: UploadDocume
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ documentId, fileId: storageId })
     });
-
-    onUpload();
   }
 
   return (

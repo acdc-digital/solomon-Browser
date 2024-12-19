@@ -1,15 +1,14 @@
-// Schema 
-// /Users/matthewsimon/Documents/GitHub/solomon-electron/solomon-electron/next/convex/schema.ts
-
+// Databse Schema
 // /Users/matthewsimon/Documents/GitHub/solomon-electron/solomon-electron/next/convex/schema.ts
 
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
-  // Schema for Projects
+  // Schema for Projects and Documents
   projects: defineTable({
     type: v.string(), // 'project' or 'document'
+
     // Projects Fields
     title: v.optional(v.string()),
     userId: v.string(),
@@ -22,8 +21,10 @@ export default defineSchema({
     // Document Fields
     documentTitle: v.optional(v.string()),
     fileId: v.optional(v.string()),
-    isProcessed: v.boolean(),
+    isProcessed: v.optional(v.boolean()),
     processedAt: v.optional(v.string()),
+    isProcessing: v.optional(v.boolean()),
+    progress: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
     .index("by_user_parent", ["userId", "parentProject"]),

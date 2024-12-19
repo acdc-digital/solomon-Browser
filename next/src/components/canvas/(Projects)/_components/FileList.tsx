@@ -57,17 +57,26 @@ export const FileList: React.FC<{ projectId: string }> = ({ projectId }) => {
         <TableBody>
           {processedDocuments.map((doc) => (
             <TableRow
-              key={doc._id.toString()}
-              onClick={() => handleRowClick(doc)}
-              className="cursor-pointer hover:bg-gray-100"
-            >
-              <TableCell>{doc.documentTitle}</TableCell>
-              <TableCell>{doc.fileType}</TableCell>
-              <TableCell>{doc.formattedCreatedAt}</TableCell>
-              <TableCell>
-                <Progress value={100} /> {/* Adjust based on actual progress if needed */}
-              </TableCell>
-            </TableRow>
+            key={doc._id.toString()}
+            onClick={() => handleRowClick(doc)}
+            className={`cursor-pointer hover:bg-gray-100 ${doc.isProcessing ? "bg-gray-50" : ""
+              }`}
+          >
+            <TableCell>{doc.documentTitle}</TableCell>
+            <TableCell>{doc.fileType}</TableCell>
+            <TableCell>{doc.formattedCreatedAt}</TableCell>
+            <TableCell>
+              {doc.isProcessing && (
+                <Progress value={doc.progress || 0} />
+              )}
+              {!doc.isProcessing && doc.isProcessed && (
+                <Progress value={100} />
+              )}
+              {!doc.isProcessing && !doc.isProcessed && (
+                <Progress value={100} />
+              )}
+            </TableCell>
+          </TableRow>
           ))}
         </TableBody>
       </Table>

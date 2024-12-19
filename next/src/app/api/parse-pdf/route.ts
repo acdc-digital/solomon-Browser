@@ -65,6 +65,11 @@ export async function POST(request: Request) {
       );
     }
 
+    await convex.mutation('projects:updateProcessingStatus', {
+      documentId,
+      progress: 10, // Update progress after fetching
+    });
+
     // **Step 6: Parse the PDF to Extract Text**
     console.log('Parsing the PDF to extract text');
 
@@ -93,6 +98,11 @@ export async function POST(request: Request) {
     const extractedText = docs.map(doc => doc.pageContent).join('\n');
     console.log('Extracted Text:', extractedText);
 
+    await convex.mutation('projects:updateProcessingStatus', {
+      documentId,
+      progress: 30, // Update progress after parsing
+    });
+
     // **Step 7: Split the Document into Chunks**
     console.log('Splitting the document into chunks');
 
@@ -110,6 +120,11 @@ export async function POST(request: Request) {
 
     console.log('Number of Chunks:', docChunks.length);
     console.log('Preview of first chunk:', docChunks[0]);
+
+    await convex.mutation('projects:updateProcessingStatus', {
+      documentId,
+      progress: 50, // Update progress after chunking
+    });
 
     // **Step 8: Retrieve parentProjectId from documentId**
     console.log('Retrieving parentProjectId from documentId:', documentId);
@@ -144,8 +159,9 @@ export async function POST(request: Request) {
       // Optionally, update the document's `isProcessed` and `processedAt` fields
       await convex.mutation('projects:updateProcessingStatus', {
         documentId,
-        isProcessed: true,
+        isProcessing: false, // Set to 'false' if processing is complete
         processedAt: new Date().toISOString(),
+        progress: 100, // Assuming processing is complete
       });
 
     } catch (insertError: any) {
@@ -155,6 +171,11 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+
+    await convex.mutation('projects:updateProcessingStatus', {
+      documentId,
+      progress: 70, // Update progress after chunk insertion
+    });
 
     // **Step 10: Generate and Store Embeddings for Chunks**
     console.log('Generating embeddings for the chunks');
@@ -167,6 +188,11 @@ export async function POST(request: Request) {
     // Generate embeddings for the chunks
     const chunkEmbeddings: number[][] = await openAIEmbeddings.embedDocuments(docChunks);
     console.log('Generated Embeddings:', chunkEmbeddings.length);
+
+    await convex.mutation('projects:updateProcessingStatus', {
+      documentId,
+      progress: 90, // Update progress after generating embeddings
+    });
 
     // **Step 11: Update the Embeddings for Each Chunk in the Database**
     console.log('Updating chunk embeddings in the database');
@@ -181,6 +207,12 @@ export async function POST(request: Request) {
       ));
 
       console.log('All chunk embeddings updated successfully.');
+
+      await convex.mutation('projects:updateProcessingStatus', {
+        documentId,
+        isProcessing: false, // Mark as not processing
+        progress: 100, // Final progress update
+      });
 
       return NextResponse.json(
         {

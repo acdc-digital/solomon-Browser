@@ -23,37 +23,37 @@ import fetch from "node-fetch";
  * @returns The parentProjectId if found, otherwise null
  */
 export const getParentProjectId = query({
-	args: {
-	  documentId: v.id("projects"),
-	},
-	handler: async (
-	  ctx,
-	  { documentId }: { documentId: Id<"projects"> }
-	): Promise<Id<"projects"> | null> => {
-	  console.log(`Fetching document with ID: ${documentId}`);
+  args: {
+    documentId: v.id("projects"),
+  },
+  handler: async (
+    ctx,
+    { documentId }: { documentId: Id<"projects"> }
+  ): Promise<Id<"projects"> | null> => {
+    console.log(`Fetching document with ID: ${documentId}`);
 
-	  // Fetch the document directly by its ID
-	  const document = await ctx.db.get(documentId);
+    // Fetch the document directly by its ID
+    const document = await ctx.db.get(documentId);
 
-	  if (!document) {
-		console.error(`Document with ID ${documentId} not found.`);
-		return null;
-	  }
+    if (!document) {
+      console.error(`Document with ID ${documentId} not found.`);
+      return null;
+    }
 
-	  if (document.type !== "document") {
-		console.error(`Document with ID ${documentId} is not of type 'document'.`);
-		return null;
-	  }
+    if (document.type !== "document") {
+      console.error(`Document with ID ${documentId} is not of type 'document'.`);
+      return null;
+    }
 
-	  if (!document.parentProject) {
-		console.error(`Document with ID ${documentId} does not have a parentProject.`);
-		return null;
-	  }
+    if (!document.parentProject) {
+      console.error(`Document with ID ${documentId} does not have a parentProject.`);
+      return null;
+    }
 
-	  console.log(`Parent Project ID: ${document.parentProject}`);
-	  return document.parentProject as Id<"projects">;
-	},
-  });
+    console.log(`Parent Project ID: ${document.parentProject}`);
+    return document.parentProject as Id<"projects">;
+  },
+});
 
 {/* export const processDocument = action({
 	args: {
@@ -175,6 +175,8 @@ export const createDocument = mutation({
 			  // Document Fields
 			  documentTitle: args.documentTitle,
 			  fileId: args.fileId,
+			  isProcessing: true, // Start processing
+			  progress: 0,        // Initial progress
 
 			  // Project Fields (set to undefined)
 			  title: undefined,
@@ -195,6 +197,32 @@ export const createDocument = mutation({
 			  // });
     },
 });
+
+export const updateProcessingStatus = mutation({
+	args: {
+	  documentId: v.id("projects"),
+	  isProcessing: v.optional(v.boolean()),
+	  processedAt: v.optional(v.string()),
+	  progress: v.optional(v.number()),
+	},
+	handler: async (ctx, args) => {
+	  const updateFields: Partial<Doc<"projects">> = {};
+
+	  if (args.isProcessing !== undefined) {
+		updateFields.isProcessing = args.isProcessing;
+	  }
+
+	  if (args.processedAt !== undefined) {
+		updateFields.processedAt = args.processedAt;
+	  }
+
+	  if (args.progress !== undefined) {
+		updateFields.progress = args.progress;
+	  }
+
+	  await ctx.db.patch(args.documentId, updateFields);
+	},
+  });
 
 // Get signed URL for a file
 export const getFileUrl = mutation({
@@ -254,28 +282,6 @@ export const getDocument = query({
 	  await ctx.db.patch(args.documentId, {
 		isProcessed: args.isProcessed,
 		processedAt: new Date().toISOString(),
-	  });
-	},
-  });
-
-// Mutation to update processing status
-export const updateProcessingStatus = mutation({
-	args: {
-	  documentId: v.id("projects"),
-	  isProcessed: v.boolean(),
-	  processedAt: v.string(),
-	},
-	handler: async (
-	  ctx,
-	  { documentId, isProcessed, processedAt }: {
-		documentId: Id<"projects">;
-		isProcessed: boolean;
-		processedAt: string;
-	  }
-	) => {
-	  await ctx.db.patch(documentId, {
-		isProcessed,
-		processedAt,
 	  });
 	},
   });
