@@ -10,7 +10,6 @@ const Chat: React.FC = () => {
 
     const sendMessage = (newMessage: Message) => {
         setMessages(prevMessages => [...prevMessages, newMessage]);
-        // Here, you could also add a call to send this message to your backend
     };
 
     return (

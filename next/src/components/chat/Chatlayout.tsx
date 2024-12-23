@@ -9,7 +9,7 @@ import Chat from './Chat';
 import { useEditorStore } from '@/lib/store/editorStore';
 
 export default function ChatLayout() {
-    const { isChatActive } = useChatStore(); // Access the chat visibility state
+    const { isChatActive, deactivateChat } = useChatStore(); // Access the chat visibility state
     const { projectId } = useEditorStore();
 
     return (
@@ -18,8 +18,12 @@ export default function ChatLayout() {
                 <div className='flex flex-col h-full w-full'>
                     {/* Header Row */}
                     <div className='flex items-center justify-between text-gray-500 px-4 ml-auto mr-2'>
-                        {/* Example: Close Button */}
-                        <button className='text-gray-500 hover:text-gray-200'>
+                        {/* Close Button */}
+                        <button
+                            className='text-gray-500 hover:text-gray-200'
+                            onClick={deactivateChat}
+                            aria-label='Close Chat'
+                            >
                             &#x2715; {/* Close Icon */}
                         </button>
                     </div>

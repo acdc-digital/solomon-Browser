@@ -24,7 +24,7 @@ const PageVisualization = ({
       style={{
         height: '50%', // Container takes full height of its parent
         overflowY: 'auto', // Enable vertical scrolling for the container
-        padding: 0, // Apply margin as padding to the container
+        padding: pageMargin, // Apply margin as padding to the container
       }}
     >
       <div
