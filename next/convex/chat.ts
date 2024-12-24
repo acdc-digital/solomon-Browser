@@ -30,7 +30,7 @@ const openai = new OpenAI({
 // -----------------------------
 async function summarizeChunk(chunkText: string): Promise<string> {
   // If the chunk is short, just return it as-is.
-  if (chunkText.length < 500) {
+  if (chunkText.length < 1000) {
     return chunkText;
   }
 
@@ -168,7 +168,7 @@ export const handleUserAction = action({
       const results: SerializedChunk[] = await ctx.runAction(api.search.combinedSearchChunks, {
         query: message,
         projectId,
-        topK: 10,
+        topK: 20,
       });
       console.log("Combined (embedding + text) Results:", results);
 

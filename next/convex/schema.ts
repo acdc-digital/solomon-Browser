@@ -39,6 +39,7 @@ export default defineSchema({
         docTitle: v.optional(v.string()),
         headings: v.optional(v.array(v.string())),
         pageNumber: v.optional(v.number()),
+        numTokens: v.optional(v.number()),
       })
     ),
     embedding: v.optional(v.array(v.float64())), // Store individual chunk embeddings

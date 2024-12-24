@@ -48,6 +48,7 @@ export const insertChunks = mutation({
             docTitle: v.optional(v.string()),
             headings: v.optional(v.array(v.string())),
             pageNumber: v.optional(v.number()),
+            numTokens: v.optional(v.number()),
           })
         ),
         chunkNumber: v.optional(v.number()),

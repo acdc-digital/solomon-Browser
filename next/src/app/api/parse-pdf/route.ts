@@ -7,10 +7,14 @@ import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 // We still import RecursiveCharacterTextSplitter for potential fallback or partial usage
 import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 import { OpenAIEmbeddings } from "@langchain/openai";
+import { get_encoding } from "tiktoken";
 
 import fs from 'fs';
 import path from 'path';
 import fetch from 'node-fetch'; // Ensure node-fetch is installed
+
+// Create a tokenizer:
+const tokenizer = get_encoding("cl100k_base");
 
 export const runtime = "nodejs";
 
@@ -314,13 +318,24 @@ export async function POST(request: Request) {
       // For each final chunk, gather the headings for that text
       for (const chunkText of pageChunks) {
         const headings = extractHeadingsFromText(chunkText);
+        // Tokenize chunk
+        const tokens = tokenizer.encode(chunkText);
+        const numTokens = tokens.length;
+
+        // **Log** the token count for debugging
+        console.log(
+          `[Tokenization] Page #${pageIndex + 1}, chunk length: ${chunkText.length}, tokens: ${numTokens}`
+        );
+
         allChunks.push({
           pageContent: chunkText,
           metadata: {
             pageNumber,
             docTitle,
             docAuthor,
-            headings,
+            headings: extractHeadingsFromText(chunkText),
+            numTokens,
+            // rawTokens: tokens, // if you want to store the tokens
           },
         });
       }
@@ -368,6 +383,7 @@ export async function POST(request: Request) {
           docTitle: chunk.metadata.docTitle,
           docAuthor: chunk.metadata.docAuthor,
           headings: chunk.metadata.headings,
+          numTokens: chunk.metadata.numTokens,
         },
       }));
 
@@ -459,6 +475,8 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+
+    tokenizer.free();
 
   } catch (error: any) {
     console.error('Error handling POST request:', error);
