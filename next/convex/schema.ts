@@ -33,12 +33,19 @@ export default defineSchema({
   chunks: defineTable({
     projectId: v.id("projects"), // Reference to the parent project
     pageContent: v.string(),
-    metadata: v.optional(v.object({})), // Allow any object
-    embedding: v.optional(v.array(v.float64())), // Optional: Store individual chunk embeddings
+    metadata: v.optional(
+      v.object({
+        docAuthor: v.optional(v.string()),
+        docTitle: v.optional(v.string()),
+        headings: v.optional(v.array(v.string())),
+        pageNumber: v.optional(v.number()),
+      })
+    ),
+    embedding: v.optional(v.array(v.float64())), // Store individual chunk embeddings
     chunkNumber: v.optional(v.number()),
   })
     .index("by_project", ["projectId"])
-    .index("by_project_and_chunkNumber", ["projectId", "chunkNumber"]) // **New Composite Index**
+    .index("by_project_and_chunkNumber", ["projectId", "chunkNumber"])
     .vectorIndex("byEmbedding", {
       vectorField: "embedding",
       dimensions: 1536,

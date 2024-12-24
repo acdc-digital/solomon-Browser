@@ -38,7 +38,18 @@ export const insertChunks = mutation({
     chunks: v.array(
       v.object({
         pageContent: v.string(),
-        metadata: v.optional(v.object({})),
+        /**
+         * Matches the new shape in your schema.ts
+         * but you only need to define what's truly required
+         */
+        metadata: v.optional(
+          v.object({
+            docAuthor: v.optional(v.string()),
+            docTitle: v.optional(v.string()),
+            headings: v.optional(v.array(v.string())),
+            pageNumber: v.optional(v.number()),
+          })
+        ),
         chunkNumber: v.optional(v.number()),
       })
     ),
@@ -47,17 +58,25 @@ export const insertChunks = mutation({
     ctx,
     { parentProjectId, chunks }: { 
       parentProjectId: Id<"projects">; 
-      chunks: { pageContent: string; metadata?: Record<string, any>; chunkNumber?: number; }[];
+      chunks: {
+        pageContent: string;
+        metadata?: {
+          docAuthor?: string;
+          docTitle?: string;
+          headings?: string[];
+          pageNumber?: number;
+        };
+        chunkNumber?: number;
+      }[];
     }
   ) => {
     const chunkDocs = chunks.map(chunk => ({
-      projectId: parentProjectId, // Assign to projectId field in the database
+      projectId: parentProjectId, 
       pageContent: chunk.pageContent,
       metadata: chunk.metadata || {},
-      chunkNumber: chunk.chunkNumber ?? undefined, // Ensure undefined if not provided
+      chunkNumber: chunk.chunkNumber ?? undefined,
     }));
-    
-    // Perform concurrent inserts
+
     await Promise.all(chunkDocs.map(doc => ctx.db.insert("chunks", doc)));
   },
 });

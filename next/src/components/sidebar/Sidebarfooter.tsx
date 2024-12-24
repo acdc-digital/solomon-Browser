@@ -14,10 +14,11 @@ const SidebarFooter: React.FC = () => {
         <div className="border-t py-4 mt-auto">
             {/* Footer content goes here */}
             <Popover>
-                <PopoverTrigger className='w-full pl-1 mb-1'>
+                <PopoverTrigger className='w-full pl-1 mb-1 text-left'>
                     <ProjectItem 
                     label="Trashcan" 
-                    icon={Trash2Icon} />
+                    icon={Trash2Icon}
+                    />
                 </PopoverTrigger>
                 <PopoverContent className='ml-3 p-0 w-72'>
                     <Trashbox />

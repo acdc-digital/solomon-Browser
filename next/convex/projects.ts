@@ -201,6 +201,7 @@ export const createDocument = mutation({
 export const updateProcessingStatus = mutation({
 	args: {
 	  documentId: v.id("projects"),
+	  isProcessed: v.optional(v.boolean()),
 	  isProcessing: v.optional(v.boolean()),
 	  processedAt: v.optional(v.string()),
 	  progress: v.optional(v.number()),
