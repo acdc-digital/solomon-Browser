@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server';
 import convex from '@/lib/convexClient';
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
+// We still import RecursiveCharacterTextSplitter for potential fallback or partial usage
 import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 import { OpenAIEmbeddings } from "@langchain/openai";
 
@@ -21,6 +22,165 @@ function extractHeadingsFromText(text: string): string[] {
     // Example heuristic: lines in ALL CAPS or lines starting with "Section"
     return /^[A-Z\s]+$/.test(trimmed) || /^Section\s+\d+:/.test(trimmed);
   });
+}
+
+/** A naive check to identify headings in text for 'hierarchical' chunking. */
+function isLikelyHeading(line: string): boolean {
+  return /^[A-Z\s]+$/.test(line.trim()) || /^Section\s+\d+:/.test(line.trim());
+}
+
+/**
+ * Example function to split a string into sections based on headings.
+ * Returns array of { heading, body } objects.
+ */
+function splitByHeadings(text: string): { heading: string; body: string }[] {
+  const lines = text.split('\n');
+  const sections: { heading: string; body: string }[] = [];
+  let currentHeading = 'UNTITLED SECTION';
+  let currentBuffer = '';
+
+  for (const line of lines) {
+    if (isLikelyHeading(line)) {
+      // Push the existing buffer to a section
+      if (currentBuffer.trim().length > 0) {
+        sections.push({ heading: currentHeading, body: currentBuffer });
+      }
+      currentHeading = line.trim();
+      currentBuffer = '';
+    } else {
+      currentBuffer += `${line}\n`;
+    }
+  }
+
+  // Push the last buffer if it exists
+  if (currentBuffer.trim().length > 0) {
+    sections.push({ heading: currentHeading, body: currentBuffer });
+  }
+
+  return sections;
+}
+
+/** Split paragraphs within each heading section. Uses naive blank line detection. */
+function splitByParagraphs(text: string): string[] {
+  // Paragraphs delimited by one or more blank lines
+  return text.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+}
+
+/**
+ * Additional fallback: a simple character-based splitter with overlap.
+ * This helps if a paragraph is still too large.
+ */
+function charBasedSplit(
+  text: string,
+  chunkSize: number,
+  chunkOverlap: number
+): string[] {
+  const chunks: string[] = [];
+  let start = 0;
+  while (start < text.length) {
+    const end = Math.min(start + chunkSize, text.length);
+    chunks.push(text.slice(start, end));
+    start += (chunkSize - chunkOverlap);
+  }
+  return chunks;
+}
+
+/**
+ * Semantic splitter that tries to split text by sentences.
+ * For example, we split at each period, question mark, exclamation mark, etc.
+ * Then enforce max length constraints with overlap.
+ */
+function semanticSplit(
+  text: string,
+  maxTokens: number,
+  overlapTokens: number
+): string[] {
+  // Very naive sentence split (regex-based). In production, consider an NLP library.
+  const sentences = text.split(/(?<=[.?!])\s+/);
+  const chunks: string[] = [];
+  let currentChunk = '';
+
+  for (const sentence of sentences) {
+    if ((currentChunk + sentence).length > maxTokens) {
+      // push the current chunk
+      chunks.push(currentChunk);
+      // add overlap from the end of currentChunk
+      const overlap = currentChunk.slice(
+        Math.max(0, currentChunk.length - overlapTokens)
+      );
+      currentChunk = overlap + ' ' + sentence;
+    } else {
+      currentChunk += (currentChunk ? ' ' : '') + sentence;
+    }
+  }
+  if (currentChunk) {
+    chunks.push(currentChunk);
+  }
+  return chunks;
+}
+
+/**
+ * A combined hierarchical + semantic approach:
+ * 1) Split by headings -> sections
+ * 2) Within each section, split by paragraphs
+ * 3) If paragraphs are too large, do a semantic or char-based split
+ */
+function hierarchicalSemanticSplit(
+  text: string,
+  chunkSize: number,
+  chunkOverlap: number
+): string[] {
+  const sections = splitByHeadings(text);
+  const finalChunks: string[] = [];
+
+  for (const section of sections) {
+    // Break the section into paragraphs
+    const paragraphs = splitByParagraphs(section.body);
+
+    for (const paragraph of paragraphs) {
+      // If paragraph is bigger than chunkSize, do further splits
+      if (paragraph.length > chunkSize) {
+        // Option A: semantic split
+        const semChunks = semanticSplit(paragraph, chunkSize, chunkOverlap);
+
+        // If any sem-split chunk is STILL bigger than chunkSize,
+        // fallback to char-based
+        for (const semChunk of semChunks) {
+          if (semChunk.length > chunkSize) {
+            // fallback
+            const charChunks = charBasedSplit(semChunk, chunkSize, chunkOverlap);
+            // Prepend the heading for context
+            for (const cChunk of charChunks) {
+              finalChunks.push(`${section.heading}\n${cChunk}`);
+            }
+          } else {
+            finalChunks.push(`${section.heading}\n${semChunk}`);
+          }
+        }
+      } else {
+        // If paragraph is within chunk size, just store it with heading
+        finalChunks.push(`${section.heading}\n${paragraph}`);
+      }
+    }
+  }
+  return finalChunks;
+}
+
+/**
+ * Demonstration of adaptive chunk sizing:
+ * - Adjust chunkSize & chunkOverlap based on total number of characters in doc.
+ */
+function getAdaptiveChunkParams(totalChars: number) {
+  if (totalChars < 5000) {
+    // smaller doc -> smaller chunkSize but bigger overlap
+    return { chunkSize: 500, chunkOverlap: 100 };
+  } else if (totalChars < 50000) {
+    // medium doc
+    return { chunkSize: 1000, chunkOverlap: 200 };
+  } else {
+    // large doc
+    return { chunkSize: 2000, chunkOverlap: 200 };
+  }
 }
 
 export async function POST(request: Request) {
@@ -127,40 +287,41 @@ export async function POST(request: Request) {
     });
 
     // -------------------------
-    // Step 7: Split Each Page-Document into Sub-chunks
+    // Step 7: Enhanced Split Each Page-Document into Sub-chunks
     // -------------------------
     console.log('Splitting the document into chunks');
-    const textSplitter = new RecursiveCharacterTextSplitter({
-      chunkSize: 1000,
-      chunkOverlap: 200,
-      separators: ["\n\n", "\n", " ", ""],
-    });
+
+    // 7a) Determine total length to pick adaptive chunk size
+    const totalChars = docs.reduce((acc, doc) => acc + doc.pageContent.length, 0);
+    const { chunkSize, chunkOverlap } = getAdaptiveChunkParams(totalChars);
+    console.log(`Adaptive chunkSize=${chunkSize}, chunkOverlap=${chunkOverlap}`);
 
     const allChunks = [];
     for (let pageIndex = 0; pageIndex < docs.length; pageIndex++) {
       const pageDoc = docs[pageIndex];
-
-      // If PDFLoader returns pageNumber in metadata
       const pageNumber = pageDoc.metadata?.loc?.pageNumber ?? pageIndex + 1;
-      // Potential docTitle/author from PDF metadata
       const docTitle = pageDoc.metadata?.title || "Untitled";
       const docAuthor = pageDoc.metadata?.author || "Unknown";
 
-      // Do a chunk split for this page
-      const pageChunks = await textSplitter.splitDocuments([pageDoc]);
+      // Instead of using RecursiveCharacterTextSplitter directly,
+      // we apply hierarchical + semantic chunking:
+      const pageChunks = hierarchicalSemanticSplit(
+        pageDoc.pageContent,
+        chunkSize,
+        chunkOverlap
+      );
 
-      // Create chunk objects that include metadata
-      for (const chunkedDoc of pageChunks) {
-        const headings = extractHeadingsFromText(chunkedDoc.pageContent);
-
+      // For each final chunk, gather the headings for that text
+      for (const chunkText of pageChunks) {
+        const headings = extractHeadingsFromText(chunkText);
         allChunks.push({
-          pageContent: chunkedDoc.pageContent,
+          pageContent: chunkText,
           metadata: {
             pageNumber,
             docTitle,
             docAuthor,
             headings,
-          }
+          },
         });
       }
     }

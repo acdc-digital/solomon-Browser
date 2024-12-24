@@ -1,14 +1,8 @@
 // /Users/matthewsimon/Documents/Github/solomon-electron/next/convex/search.ts
-// Search.ts
-
-// 	Embedding Generation: Uses OpenAI’s text-embedding-ada-002 model to generate an embedding for the user query.
-//  Vector Search: Utilizes Convex’s vectorSearch method on the chunks table’s byEmbedding index to find the top K similar chunks.
-//  Filtering: Ensures that only chunks related to the specified projectId are retrieved.
-
-// convex/search.ts
+// search.ts
 
 import { v } from "convex/values";
-import { action, internalQuery } from "./_generated/server";
+import { action, query, internalQuery } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import OpenAI from "openai";
 import { api, internal } from "./_generated/api"; // Import both api and internal
@@ -18,7 +12,7 @@ interface SerializedChunk {
   _id: string;
   projectId: Id<"projects">;
   pageContent: string;
-  metadata: Record<string, any>;
+  metadata: Record<string, any>; // Must be a plain object, not undefined
   embedding: number[] | null;
   chunkNumber: number | null;
 }
@@ -28,7 +22,9 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Define the internal query to fetch chunks by IDs
+// --------------------------------------------------------------------------
+// Internal Query: fetchChunks by ID (for vector search results)
+// --------------------------------------------------------------------------
 export const fetchChunks = internalQuery({
   args: { ids: v.array(v.id("chunks")) },
   handler: async (ctx, args) => {
@@ -42,94 +38,64 @@ export const fetchChunks = internalQuery({
           _id: chunk._id.toString(),
           projectId: chunk.projectId as Id<"projects">,
           pageContent: chunk.pageContent,
-          metadata: chunk.metadata || {},
-          embedding: chunk.embedding || null,
-          chunkNumber: chunk.chunkNumber || null,
+          metadata: chunk.metadata ?? {}, // ensure an object
+          embedding: chunk.embedding ?? null,
+          chunkNumber: chunk.chunkNumber ?? null,
         });
       }
     }
-
     return results;
   },
 });
 
-/**
- * Action to search for similar chunks based on a user query and generate a response.
- */
-{/* export const searchChunks = action({
+// --------------------------------------------------------------------------
+// Query: textSearchChunks (full-text search on "pageContent")
+// --------------------------------------------------------------------------
+export const textSearchChunks = query({
   args: {
     query: v.string(),
     projectId: v.id("projects"),
-    topK: v.optional(v.number()), // Number of top similar chunks to retrieve
+    topK: v.number(),
   },
-  handler: async (
-    ctx,
-    { query, projectId, topK = 5 }: { query: string; projectId: Id<"projects">; topK?: number }
-  ): Promise<{ response: string }> => {
-    try {
-      // Step 1: Generate embedding for the query using OpenAI
-      const embeddingResponse = await openai.embeddings.create({
-        model: "text-embedding-ada-002",
-        input: query,
-      });
+  handler: async (ctx, { query, projectId, topK }) => {
+    // 1) Perform the full-text search using the searchPageContent index
+    const rawDocs = await ctx.db
+      .query("chunks")
+      .withSearchIndex("search_pageContent", (q) =>
+        q.search("pageContent", query).eq("projectId", projectId)
+      )
+      .take(topK);
 
-      const queryEmbedding: number[] = embeddingResponse.data[0].embedding;
+    // 2) Convert each doc to our SerializedChunk shape
+    const typedDocs: SerializedChunk[] = rawDocs.map((doc) => ({
+      _id: doc._id.toString(),
+      projectId: doc.projectId as Id<"projects">,
+      pageContent: doc.pageContent,
+      metadata: doc.metadata ?? {}, // fallback to an empty object
+      embedding: doc.embedding ?? null,
+      chunkNumber: doc.chunkNumber ?? null,
+    }));
 
-      // Step 2: Perform vector search using Convex's vector index
-      const vectorSearchResults = await ctx.vectorSearch("chunks", "byEmbedding", {
-        vector: queryEmbedding,
-        limit: topK,
-        filter: (q) => q.eq("projectId", projectId),
-      });
+    return typedDocs;
+  },
+});
 
-      // Extract the chunk IDs from the vector search results
-      const chunkIds = vectorSearchResults.map((result) => result._id);
-
-      // Step 3: Fetch the actual chunks using the internal query
-      const similarChunks: SerializedChunk[] = await ctx.runQuery(internal.search.fetchChunks, { ids: chunkIds });
-
-      // Step 4: Construct the context from similar chunks
-      const contextText = similarChunks.map((chunk) => chunk.pageContent).join("\n\n");
-
-      // Step 5: Generate a response using OpenAI's Chat Completion API
-      const chatCompletion = await openai.chat.completions.create({
-        messages: [
-          { role: "system", content: "You are a helpful assistant." },
-          {
-            role: "user",
-            content: `
-              Here is some context from your documents:
-              ${contextText}
-
-              Based on the above context, answer the following question:
-              "${query}"
-            `,
-          },
-        ],
-        model: "gpt-3.5-turbo", // You can use "gpt-4" if available and necessary
-      });
-
-      // Handle potential null values
-      const response: string =
-        chatCompletion.choices[0].message.content?.trim() ||
-        "I'm sorry, I couldn't generate a response.";
-
-      // Step 6: Optionally, store the chat interaction in the 'chat' table
-      await ctx.db.insert("chat", {
-        input: query,
-        response: response,
-        projectId: projectId,
-      });
-
-      return { response };
-    } catch (error) {
-      console.error("Error during searchChunks action:", error);
-      throw new Error("An error occurred while processing your request.");
+// A small helper to remove duplicates by _id
+function deduplicateChunksById(docs: SerializedChunk[]): SerializedChunk[] {
+  const seen = new Set<string>();
+  const out: SerializedChunk[] = [];
+  for (const d of docs) {
+    if (!seen.has(d._id)) {
+      out.push(d);
+      seen.add(d._id);
     }
-  },
-}); */}
+  }
+  return out;
+}
 
-// Define the getSimilarChunks action
+// --------------------------------------------------------------------------
+// getSimilarChunks (Vector-based retrieval)
+// --------------------------------------------------------------------------
 export const getSimilarChunks = action({
   args: {
     query: v.string(),
@@ -141,27 +107,23 @@ export const getSimilarChunks = action({
     { query, projectId, topK = 5 }: { query: string; projectId: Id<"projects">; topK?: number }
   ): Promise<SerializedChunk[]> => {
     try {
-      // Step 1: Generate embedding for the query using OpenAI
+      // 1) Generate embedding for the query using OpenAI
       const embeddingResponse = await openai.embeddings.create({
         model: "text-embedding-ada-002",
         input: query,
       });
-
       const queryEmbedding: number[] = embeddingResponse.data[0].embedding;
 
-      // Step 2: Perform vector search using Convex's vector index
+      // 2) Perform vector search using Convex's vector index
       const vectorSearchResults = await ctx.vectorSearch("chunks", "byEmbedding", {
         vector: queryEmbedding,
         limit: topK,
         filter: (q) => q.eq("projectId", projectId),
       });
 
-      // Extract the chunk IDs from the vector search results
-      const chunkIds = vectorSearchResults.map((result) => result._id);
-
-      // Step 3: Fetch the actual chunks using the internal query
-      const similarChunks: SerializedChunk[] = await ctx.runQuery(internal.search.fetchChunks, { ids: chunkIds });
-
+      // 3) Fetch actual chunks
+      const chunkIds = vectorSearchResults.map((res) => res._id);
+      const similarChunks = await ctx.runQuery(internal.search.fetchChunks, { ids: chunkIds });
       return similarChunks;
     } catch (error) {
       console.error("Error during getSimilarChunks action:", error);
@@ -169,3 +131,57 @@ export const getSimilarChunks = action({
     }
   },
 });
+
+// --------------------------------------------------------------------------
+// combinedSearchChunks (Embedding + Full-text search approach)
+// --------------------------------------------------------------------------
+export const combinedSearchChunks = action({
+  args: {
+    query: v.string(),
+    projectId: v.id("projects"),
+    topK: v.optional(v.number()),
+  },
+  handler: async (
+    ctx,
+    { query, projectId, topK = 8 }: { query: string; projectId: Id<"projects">; topK?: number }
+  ): Promise<SerializedChunk[]> => {
+    try {
+      // 1) Vector-based results from getSimilarChunks
+      const embeddingResults = await ctx.runAction(api.search.getSimilarChunks, {
+        query,
+        projectId,
+        topK,
+      });
+
+      // 2) Text-based search results (call the textSearchChunks query)
+      const textResults = await ctx.runQuery(api.search.textSearchChunks, {
+        query,
+        projectId,
+        topK,
+      });
+
+      // 3) Merge them and deduplicate by _id
+      const combined = [...embeddingResults, ...textResults];
+      const uniqueResults = deduplicateById(combined);
+
+      // 4) Return topK again if needed
+      return uniqueResults.slice(0, topK);
+    } catch (error) {
+      console.error("Error in combinedSearchChunks:", error);
+      throw new Error("An error occurred while combining search results.");
+    }
+  },
+});
+
+/** Utility to remove duplicates by _id */
+function deduplicateById(docs: SerializedChunk[]): SerializedChunk[] {
+  const seen = new Set();
+  const out: SerializedChunk[] = [];
+  for (const d of docs) {
+    if (!seen.has(d._id)) {
+      out.push(d);
+      seen.add(d._id);
+    }
+  }
+  return out;
+}

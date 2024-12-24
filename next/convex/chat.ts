@@ -1,15 +1,9 @@
 // Chat.ts
 // /Users/matthewsimon/Documents/Github/solomon-electron/next/convex/chat.ts
 
-// Retrieve Similar Chunks: Utilizes the newly created searchChunks API to fetch the top K similar chunks based on the user query.
-// Construct Context: Combines the content of these chunks to provide context for the OpenAI model.
-// Generate Response: Sends the prompt with context to OpenAI’s Chat Completion API to generate a response.
-// Store Chat Entry: Inserts the user query and the generated response into the chat table for record-keeping.
-// Return Response: Sends the generated response back to the user.
-
 import { v } from "convex/values";
 import { action, mutation, query } from "./_generated/server";
-import { api, internal } from "./_generated/api";
+import { api } from "./_generated/api";
 import OpenAI from "openai";
 import { Id } from "./_generated/dataModel"; // Import Id type
 
@@ -31,7 +25,87 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY, // Ensure your API key is set in environment variables
 });
 
+// -----------------------------
+// Helper: Summarize a chunk if it's too large
+// -----------------------------
+async function summarizeChunk(chunkText: string): Promise<string> {
+  // If the chunk is short, just return it as-is.
+  if (chunkText.length < 500) {
+    return chunkText;
+  }
+
+  // Otherwise, call OpenAI to summarize it:
+  const systemPrompt = `
+    You are a helpful assistant. Please provide a concise summary of the following text:
+  `.trim();
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: chunkText },
+    ],
+    // You can experiment with temperature, maxTokens, etc.
+  });
+
+  const summary = completion.choices[0].message?.content ?? "";
+  return summary;
+}
+
+// -------------------------------------------------------------
+// Combined Search Helper
+// -------------------------------------------------------------
+/**
+ * Merges results from:
+ * 1) Vector-based search via `getSimilarChunks`
+ * 2) Full-text search using Convex's search index
+ */
+async function combinedSearchChunks(
+  ctx: any,
+  message: string,
+  projectId: Id<"projects">,
+  topK: number
+): Promise<SerializedChunk[]> {
+  // 1) Vector-based results from existing getSimilarChunks
+  const embeddingResults: SerializedChunk[] = await ctx.runAction(
+    api.search.getSimilarChunks,
+    { query: message, projectId, topK }
+  );
+
+  // 2) Full-text search results
+  // Ensure your schema uses searchIndex("search_pageContent", { ... }) on the "chunks" table
+  const textSearchResults = await ctx.db
+    .query("chunks")
+    .withSearchIndex("search_pageContent", (q: any) =>
+      q.search("pageContent", message).eq("projectId", projectId)
+    )
+    .take(topK); // Take topK, results come in descending relevance order
+
+  // 3) Merge and deduplicate by _id
+  const combined = [...embeddingResults, ...textSearchResults];
+  const uniqueResults = deduplicateChunksById(combined);
+
+  // 4) Optional: Re-rank or slice if you want to limit to topK overall
+  // For simplicity, we just slice:
+  return uniqueResults.slice(0, topK);
+}
+
+/** Utility to remove duplicates by _id */
+function deduplicateChunksById(docs: SerializedChunk[]): SerializedChunk[] {
+  const seen = new Set<string>();
+  const out: SerializedChunk[] = [];
+  for (const d of docs) {
+    if (!seen.has(d._id)) {
+      out.push(d);
+      seen.add(d._id);
+    }
+  }
+  return out;
+}
+
+// -----------------------------
 // Mutation to insert chat entries
+// -----------------------------
 export const insertEntry = mutation({
   args: {
     input: v.string(),
@@ -50,7 +124,9 @@ export const insertEntry = mutation({
   },
 });
 
+// -----------------------------
 // Query to get all chat entries for a project
+// -----------------------------
 export const getAllEntries = query({
   args: {
     projectId: v.id("projects"),
@@ -74,8 +150,10 @@ export const getAllEntries = query({
   },
 });
 
+// -----------------------------
 // Action to handle user messages
-// Enhanced Action to handle user messages with Agent Logic
+// Enhanced Action with Summaries + Metadata + Combined Search
+// -----------------------------
 export const handleUserAction = action({
   args: {
     message: v.string(),
@@ -83,48 +161,64 @@ export const handleUserAction = action({
   },
   handler: async (
     ctx,
-    { message, projectId }: { message: string; projectId: Id<"projects"> }
+    { message, projectId }
   ): Promise<HandleUserActionResponse> => {
     try {
-      // Step 1: Retrieve similar chunks using the searchChunks API
-      const results: SerializedChunk[] = await ctx.runAction(api.search.getSimilarChunks, {
+      // Step 1: Retrieve chunks from both embeddings + text search
+      const results: SerializedChunk[] = await ctx.runAction(api.search.combinedSearchChunks, {
         query: message,
         projectId,
-        topK: 4, // Adjust based on desired number of similar chunks
+        topK: 10,
+      });
+      console.log("Combined (embedding + text) Results:", results);
+
+      // Step 2: Summarize and combine chunk content + METADATA
+      const contextPromises = results.map(async (chunk) => {
+        const { pageNumber, docTitle, docAuthor, headings } = chunk.metadata || {};
+        const possiblySummarized = await summarizeChunk(chunk.pageContent);
+
+        return `
+[Chunk ID: ${chunk._id}]
+Page ${pageNumber || "?"} | Title: ${docTitle || "Untitled"} | Author: ${docAuthor || "Unknown"}
+Headings: ${headings?.join(", ") || "None"}
+---
+${possiblySummarized}
+        `.trim();
       });
 
-      // Log serialized results for debugging
-      console.log("Serialized Results:", results);
-
-      // Step 2: Combine the content of all chunks into a single context string
-      const contextText: string = results.map((chunk) => chunk.pageContent).join("\n\n");
+      const contextArray = await Promise.all(contextPromises);
+      const contextText = contextArray.join("\n\n");
 
       // Step 3: Construct the prompt for OpenAI with context
-      const prompt: string = `
-        You are a helpful assistant. The user asked: "${message}"
+      const systemPrompt = `
+You are a helpful assistant. The user asked: "${message}"
 
-        Here is some additional context from the relevant documents:
-        ${contextText}
+You have the following context from relevant documents, with their headings and metadata.
+Use it only if relevant. When referencing content, note the chunk ID or page number.
 
-        Please answer the user’s question as accurately and helpfully as possible using the above context.
+Context:
+${contextText}
+
+Instructions:
+1) Provide an answer based on the context if relevant.
+2) If the context is insufficient, indicate that you lack enough info.
+3) Cite relevant chunk IDs or page numbers if referencing specific text.
       `.trim();
 
-      // Log the prompt for debugging
-      console.log("Prompt for OpenAI:", prompt);
+      console.log("System Prompt for OpenAI:", systemPrompt);
 
       // Step 4: Call OpenAI's Chat Completion API
       const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
         messages: [
-          { role: "system", content: prompt },
+          { role: "system", content: systemPrompt },
           { role: "user", content: message },
         ],
-        model: "gpt-3.5-turbo", // Consider using a more advanced model if needed
+        temperature: 0.7,
       });
 
       // Step 5: Extract the response from OpenAI
-      const response: string = completion.choices[0].message.content ?? "";
-
-      // Log the OpenAI response for debugging
+      const response: string = completion.choices[0].message?.content ?? "";
       console.log("OpenAI Response:", response);
 
       // Step 6: Insert the chat entry into the database
@@ -142,3 +236,5 @@ export const handleUserAction = action({
     }
   },
 });
+
+// End of file

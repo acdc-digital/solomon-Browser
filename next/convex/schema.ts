@@ -44,13 +44,17 @@ export default defineSchema({
     embedding: v.optional(v.array(v.float64())), // Store individual chunk embeddings
     chunkNumber: v.optional(v.number()),
   })
-    .index("by_project", ["projectId"])
-    .index("by_project_and_chunkNumber", ["projectId", "chunkNumber"])
-    .vectorIndex("byEmbedding", {
-      vectorField: "embedding",
-      dimensions: 1536,
-      filterFields: ["projectId"],
-    }),
+  .index("by_project", ["projectId"])
+  .index("by_project_and_chunkNumber", ["projectId", "chunkNumber"])
+  .vectorIndex("byEmbedding", {
+    vectorField: "embedding",
+    dimensions: 1536,
+    filterFields: ["projectId"],
+  })
+  .searchIndex("search_pageContent", {
+    searchField: "pageContent",
+    filterFields: ["projectId"],
+  }),
 
   // Schema for Chat
   chat: defineTable({
