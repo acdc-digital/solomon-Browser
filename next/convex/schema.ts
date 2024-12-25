@@ -1,4 +1,4 @@
-// Databse Schema
+// Database Schema
 // /Users/matthewsimon/Documents/GitHub/solomon-electron/solomon-electron/next/convex/schema.ts
 
 import { defineSchema, defineTable } from "convex/server";
@@ -45,18 +45,20 @@ export default defineSchema({
     ),
     embedding: v.optional(v.array(v.float64())), // Store individual chunk embeddings
     chunkNumber: v.optional(v.number()),
+    uniqueChunkId: v.string(), // New unique identifier for each chunk
   })
-  .index("by_project", ["projectId"])
-  .index("by_project_and_chunkNumber", ["projectId", "chunkNumber"])
-  .vectorIndex("byEmbedding", {
-    vectorField: "embedding",
-    dimensions: 1536,
-    filterFields: ["projectId"],
-  })
-  .searchIndex("search_pageContent", {
-    searchField: "pageContent",
-    filterFields: ["projectId"],
-  }),
+    .index("by_project", ["projectId"])
+    .index("by_project_and_chunkNumber", ["projectId", "chunkNumber"])
+    .index("by_uniqueChunkId", ["uniqueChunkId"]) // New index for uniqueChunkId
+    .vectorIndex("byEmbedding", {
+      vectorField: "embedding",
+      dimensions: 1536,
+      filterFields: ["projectId"],
+    })
+    .searchIndex("search_pageContent", {
+      searchField: "pageContent",
+      filterFields: ["projectId"],
+    }),
 
   // Schema for Chat
   chat: defineTable({

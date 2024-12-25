@@ -11,7 +11,7 @@ export const insertChunk = mutation({
     parentProjectId: v.id("projects"),
     pageContent: v.string(),
     metadata: v.optional(v.object({})), // Allow any object
-    chunkNumber: v.optional(v.number()), // Use v.number() instead of v.int()
+    chunkNumber: v.optional(v.number()), // Optional if unique ID is used
   },
   handler: async (
     ctx,
@@ -22,11 +22,14 @@ export const insertChunk = mutation({
       chunkNumber?: number;
     }
   ) => {
+    const uniqueChunkId = `${parentProjectId}-chunk-${chunkNumber}`;
+
     await ctx.db.insert("chunks", {
-      projectId: parentProjectId, // Assign to projectId field in the database
+      projectId: parentProjectId,
+      uniqueChunkId, // New unique identifier
       pageContent,
       metadata: metadata || {},
-      chunkNumber: chunkNumber ?? undefined, // Ensure undefined if not provided
+      chunkNumber: chunkNumber ?? undefined, // Optional
     });
   },
 });
@@ -38,10 +41,6 @@ export const insertChunks = mutation({
     chunks: v.array(
       v.object({
         pageContent: v.string(),
-        /**
-         * Matches the new shape in your schema.ts
-         * but you only need to define what's truly required
-         */
         metadata: v.optional(
           v.object({
             docAuthor: v.optional(v.string()),
@@ -73,7 +72,8 @@ export const insertChunks = mutation({
     }
   ) => {
     const chunkDocs = chunks.map(chunk => ({
-      projectId: parentProjectId, 
+      projectId: parentProjectId,
+      uniqueChunkId: `${parentProjectId}-chunk-${chunk.chunkNumber}`, // Generate unique ID
       pageContent: chunk.pageContent,
       metadata: chunk.metadata || {},
       chunkNumber: chunk.chunkNumber ?? undefined,
@@ -85,32 +85,32 @@ export const insertChunks = mutation({
 
 // Mutation to update a chunk's embedding
 export const updateChunkEmbedding = mutation({
-    args: {
-      parentProjectId: v.id("projects"),
-      chunkNumber: v.number(),
-      embedding: v.array(v.float64()),
-    },
-    handler: async (
-      ctx,
-      { parentProjectId, chunkNumber, embedding }: { 
-        parentProjectId: Id<"projects">; 
-        chunkNumber: number; 
-        embedding: number[];
-      }
-    ) => {
-      const chunk = await ctx.db.query("chunks")
-        .withIndex("by_project_and_chunkNumber", (q: any) => q
-          .eq("projectId", parentProjectId)
-          .eq("chunkNumber", chunkNumber)
-        )
-        .first();
-  
-      if (!chunk) {
-        throw new Error(`Chunk number ${chunkNumber} for project ${parentProjectId} not found.`);
-      }
-  
-      await ctx.db.patch(chunk._id, {
-        embedding,
-      });
-    },
+  args: {
+    parentProjectId: v.id("projects"),
+    chunkNumber: v.number(),
+    embedding: v.array(v.float64()),
+  },
+  handler: async (
+    ctx,
+    { parentProjectId, chunkNumber, embedding }: { 
+      parentProjectId: Id<"projects">; 
+      chunkNumber: number; 
+      embedding: number[];
+    }
+  ) => {
+    const uniqueChunkId = `${parentProjectId}-chunk-${chunkNumber}`;
+    const chunk = await ctx.db.query("chunks")
+      .withIndex("by_uniqueChunkId", (q: any) =>
+        q.eq("uniqueChunkId", uniqueChunkId)
+      )
+      .first();
+
+    if (!chunk) {
+      throw new Error(`Chunk with unique ID ${uniqueChunkId} not found.`);
+    }
+
+    await ctx.db.patch(chunk._id, {
+      embedding,
+    });
+  },
 });
