@@ -1,4 +1,4 @@
-// RAG Pipeline
+// RAG API Route 
 // /Users/matthewsimon/Documents/Github/solomon-electron/next/src/app/api/parse-pdf/route.ts
 
 import { NextResponse } from 'next/server';
@@ -6,14 +6,13 @@ import convex from '@/lib/convexClient';
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { OpenAIEmbeddings } from "@langchain/openai";
 import { get_encoding } from "tiktoken";
+import { v4 as uuidv4 } from 'uuid';
+import { fromPath as pdf2picFromPath } from 'pdf2pic'; 
 
 import fs from 'fs';
 import path from 'path';
 import fetch from 'node-fetch'; // Ensure node-fetch is installed
 import pLimit from 'p-limit';    // For controlled concurrency
-
-// Create a tokenizer:
-const tokenizer = get_encoding("cl100k_base");
 
 export const runtime = "nodejs";
 
@@ -281,6 +280,9 @@ export async function POST(request: Request) {
   let tempFilePath = '';
 
   try {
+    // Initialize tokenizer inside the handler
+    const tokenizer = get_encoding("cl100k_base");
+
     // -------------------------
     // Step 1: Parse the Incoming JSON Body
     // -------------------------
@@ -397,49 +399,84 @@ export async function POST(request: Request) {
       const docTitle = pageDoc.metadata?.title || "Untitled";
       const docAuthor = pageDoc.metadata?.author || "Unknown";
 
-      // Instead of using RecursiveCharacterTextSplitter directly,
-      // we apply hierarchical + semantic chunking:
+      // Apply hierarchical + semantic chunking
       const pageChunks = hierarchicalSemanticSplit(
         pageDoc.pageContent,
         chunkSize,
         chunkOverlap
       );
 
-      // For each final chunk, gather the headings for that text
       for (const chunkText of pageChunks) {
-
         const snippetMatch = chunkText.match(/Snippet:\s*(.*)\n/);
         const snippet = snippetMatch ? snippetMatch[1].trim() : "";
 
         const headings = extractHeadingsFromText(chunkText);
-        // Tokenize chunk
-        const tokens = tokenizer.encode(chunkText);
+
+        // **Add Validation for chunkText**
+        if (typeof chunkText !== 'string' || chunkText.trim().length === 0) {
+          console.error('Invalid chunkText encountered. Skipping encoding.');
+          allChunks.push({
+            pageContent: chunkText,
+            metadata: {
+              pageNumber,
+              docTitle,
+              docAuthor,
+              headings,
+              numTokens: 0, // Handle as needed
+              snippet,
+            },
+          });
+          continue; // Skip to the next chunk
+        }
+
+        // **Wrap Encoding in Try-Catch**
+        let tokens: number[];
+        try {
+          console.log(`Encoding chunk: "${chunkText.slice(0, 100)}..."`);
+          tokens = tokenizer.encode(chunkText);
+        } catch (error) {
+          console.error('Error encoding chunkText:', error, 'Chunk:', chunkText);
+          allChunks.push({
+            pageContent: chunkText,
+            metadata: {
+              pageNumber,
+              docTitle,
+              docAuthor,
+              headings,
+              numTokens: 0, // Handle as needed
+              snippet,
+            },
+          });
+          continue; // Skip to the next chunk
+        }
+
         const numTokens = tokens.length;
 
-        // **Log** the token count for debugging
+        // **Log the Token Count**
         console.log(
           `[Tokenization] Page #${pageIndex + 1}, chunk length: ${chunkText.length}, tokens: ${numTokens}`
         );
 
+        // **Push to allChunks**
         allChunks.push({
           pageContent: chunkText,
           metadata: {
             pageNumber,
             docTitle,
             docAuthor,
-            headings: extractHeadingsFromText(chunkText),
+            headings,
             numTokens,
-            // rawTokens: tokens, // if you want to store the tokens
             snippet,
           },
         });
       }
     }
 
-    // Number them globally
+    // Assign a unique UUID to each chunk (server-side generation)
     const docChunks = allChunks.map((item, index) => ({
       ...item,
-      chunkNumber: index + 1,
+      uniqueChunkId: uuidv4(), // Generate UUID for each chunk
+      chunkNumber: index + 1,  // Retain chunkNumber if needed for ordering
     }));
 
     console.log('Total number of sub-chunks across all pages:', docChunks.length);
@@ -473,6 +510,7 @@ export async function POST(request: Request) {
       const chunkDocs = docChunks.map((chunk) => ({
         pageContent: chunk.pageContent,
         chunkNumber: chunk.chunkNumber,
+        uniqueChunkId: chunk.uniqueChunkId,
         metadata: {
           pageNumber: chunk.metadata.pageNumber,
           docTitle: chunk.metadata.docTitle,
@@ -483,6 +521,7 @@ export async function POST(request: Request) {
         },
       }));
 
+      // **Use insertChunks mutation to insert all chunks**
       await convex.mutation('chunks:insertChunks', {
         parentProjectId,
         chunks: chunkDocs,
@@ -550,22 +589,19 @@ export async function POST(request: Request) {
     try {
       await Promise.all(
         chunkEmbeddings.map((embedding, index) => {
-          const chunkNumber = docChunks[index].chunkNumber;
-          console.log(`Updating embedding for Chunk #${chunkNumber}:`, {
-            parentProjectId,
-            chunkNumber,
+          const uniqueChunkId = docChunks[index].uniqueChunkId; 
+          console.log(`Updating embedding for Chunk with ID ${uniqueChunkId}:`, {
             embeddingSnippet: embedding.slice(0, 5), // Log first 5 values
           });
 
           return limit(() =>
             convex.mutation('chunks:updateChunkEmbedding', {
-              parentProjectId,
-              chunkNumber: chunkNumber,
+              uniqueChunkId: uniqueChunkId, // Use UUID
               embedding: embedding,
             }).then(() => {
-              console.log(`Successfully updated embedding for Chunk #${chunkNumber}`);
+              console.log(`Successfully updated embedding for Chunk with ID ${uniqueChunkId}`);
             }).catch((error) => {
-              console.error(`Failed to update embedding for Chunk #${chunkNumber}:`, error);
+              console.error(`Failed to update embedding for Chunk with ID ${uniqueChunkId}:`, error);
             })
           );
         })
@@ -598,7 +634,8 @@ export async function POST(request: Request) {
       );
     }
 
-    tokenizer.free();
+    // Free tokenizer resources if applicable
+    tokenizer.free?.();
 
   } catch (error: any) {
     console.error('Error handling POST request:', error);

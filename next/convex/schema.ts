@@ -48,7 +48,6 @@ export default defineSchema({
     uniqueChunkId: v.string(), // New unique identifier for each chunk
   })
     .index("by_project", ["projectId"])
-    .index("by_project_and_chunkNumber", ["projectId", "chunkNumber"])
     .index("by_uniqueChunkId", ["uniqueChunkId"]) // New index for uniqueChunkId
     .vectorIndex("byEmbedding", {
       vectorField: "embedding",
