@@ -8,4 +8,7 @@ export interface DocumentData {
   documentTitle: string;
   createdAt: Date;
   fileId: Id<"_storage">;
+  isProcessing: boolean;
+  isProcessed: boolean;
+  progress: number;
 }
