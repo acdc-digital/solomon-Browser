@@ -1,21 +1,40 @@
 // Chat.tsx
-// /Users/matthewsimon/Documents/GitHub/acdc.solomon-electron/solomon-electron/next/src/app/dashboard/_components/Chat.tsx
-
-import React, { useState } from 'react';
+import React from 'react';
 import ChatHeader from '@/components/chat/Chatheader';
 import ChatLayout from '@/components/chat/Chatlayout';
+import useChatStore from '@/lib/store/chatStore';
+import { initResize } from '@/components/chat/Resizer';
+
+const MIN_WIDTH = 200;
+const MAX_WIDTH = 600;
 
 const Chat: React.FC = () => {
-    const [messages, setMessages] = useState<Message[]>([]); // Assuming Message is a defined type/interface
-
-    const sendMessage = (newMessage: Message) => {
-        setMessages(prevMessages => [...prevMessages, newMessage]);
-    };
+    const { chatWidth, setChatWidth } = useChatStore();
 
     return (
-        <div className='flex flex-col w-[24%] h-screen border-l'>
-            <ChatHeader title="Chat" />
-            <ChatLayout />
+        <div className="flex h-screen">
+            {/* Main Content (Canvas) */}
+            <div className="flex-1">
+                {/* Your main application content (e.g., Canvas) goes here */}
+            </div>
+
+            {/* Resizer */}
+            <div
+                className="w-1 cursor-col-resize bg-gray-300 hover:bg-gray-400 transition-colors duration-200"
+                onMouseDown={(e) => initResize(e, setChatWidth, MIN_WIDTH, MAX_WIDTH)}
+                onTouchStart={(e) => initResize(e, setChatWidth, MIN_WIDTH, MAX_WIDTH)}
+                aria-label="Resize chat panel"
+                role="separator"
+            />
+
+            {/* Chat Panel */}
+            <div
+                className="flex flex-col border-l bg-white"
+                style={{ width: `${chatWidth}px`, minWidth: `${MIN_WIDTH}px`, maxWidth: `${MAX_WIDTH}px` }}
+            >
+                <ChatHeader title="Chat" avatarUrl="path_to_avatar" fallbackText="U" />
+                <ChatLayout />
+            </div>
         </div>
     );
 };
