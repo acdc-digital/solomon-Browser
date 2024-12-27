@@ -19,7 +19,7 @@ export default function ChatLayout() {
                     {/* Header Row */}
                     <div className='flex items-center justify-between text-gray-500 px-4 ml-auto mr-2'>
                         {/* Close Button */}
-                        <button
+                        <button 
                             className='text-gray-500 hover:text-gray-200'
                             onClick={deactivateChat}
                             aria-label='Close Chat'

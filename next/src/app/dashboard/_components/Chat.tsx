@@ -13,11 +13,6 @@ const Chat: React.FC = () => {
 
     return (
         <div className="flex h-screen">
-            {/* Main Content (Canvas) */}
-            <div className="flex-1">
-                {/* Your main application content (e.g., Canvas) goes here */}
-            </div>
-
             {/* Resizer */}
             <div
                 className="w-1 cursor-col-resize bg-gray-300 hover:bg-gray-400 transition-colors duration-200"
