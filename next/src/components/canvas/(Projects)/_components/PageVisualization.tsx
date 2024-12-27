@@ -6,46 +6,45 @@ import React from 'react';
 interface PageVisualizationProps {
   pageSize: 'A4' | 'Letter';
   pageMargin?: string;
+  zoom: number;
   children?: React.ReactNode;
 }
 
 const PageVisualization = ({
   pageSize,
   pageMargin = '20px auto',
+  zoom,
   children,
 }: PageVisualizationProps) => {
   const dimensions = pageSize === 'A4'
-    ? { width: '210mm', height: '297mm' }
-    : { width: '8.5in', height: '11in' };
+    ? { width: 595, height: 842 } // A4 in pixels at 72 DPI
+    : { width: 612, height: 792 }; // Letter in pixels at 72 DPI
 
   return (
     <div
-      className="page-visualization-container"
+      className="page-visualization-container flex justify-center items-center"
       style={{
-        height: '50%', // Container takes full height of its parent
-        overflowY: 'auto', // Enable vertical scrolling for the container
-        padding: pageMargin, // Apply margin as padding to the container
+        padding: pageMargin,
+        overflow: 'auto',
       }}
     >
       <div
-        className="page-visualization"
+        className="page-visualization bg-white border border-gray-300 shadow-md"
         style={{
-          width: '100%',
-          maxWidth: dimensions.width,
+          width: dimensions.width,
           height: dimensions.height,
-          border: '1px solid #d3d3d3',
-          boxShadow: '0 0 5px rgba(0, 0, 0, 0.1)',
+          transform: `scale(${zoom})`,
+          transformOrigin: 'top left',
           backgroundColor: 'white',
-          margin: '0 auto', // Center the page within the container
-          overflowY: 'auto',
+          overflow: 'hidden',
+          position: 'relative',
         }}
       >
         <div
-          className="editor-content-wrapper"
+          className="editor-content-wrapper p-4 overflow-auto h-full"
           style={{
-            height: '50%', // Make editor content wrapper take the full height of the page
-            overflowY: 'auto', // Enable vertical scrolling for content within the page
-            padding: '10px',
+            width: '100%',
+            height: '100%',
           }}
         >
           {children}

@@ -1,7 +1,7 @@
 // TipTapEditor.tsx
 // /Users/matthewsimon/Documents/Github/solomon-electron/next/src/components/canvas/(Projects)/_components/TipTapEditor.tsx
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   BoldIcon,
   CodeIcon,
@@ -22,6 +22,8 @@ import {
   Heading1Icon,
   Heading2Icon,
   Heading3Icon,
+  PlusCircle, // Alternative for Zoom In
+  MinusCircle, // Alternative for Zoom Out
 } from 'lucide-react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -51,6 +53,8 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
   onChange,
   initialContent,
 }) => {
+  const [zoom, setZoom] = useState(1); // Initialize zoom state
+
   const editor = useEditor({
     editorProps: {
       attributes: {
@@ -130,8 +134,17 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
   const buttonClass = (isActive: boolean) =>
     `p-1 rounded hover:bg-gray-200 ${isActive ? 'bg-gray-300' : ''}`;
 
+  // Zoom Handlers
+  const handleZoomIn = () => {
+    setZoom((prev) => Math.min(prev + 0.1, 3)); // Max zoom 300%
+  };
+
+  const handleZoomOut = () => {
+    setZoom((prev) => Math.max(prev - 0.1, 0.5)); // Min zoom 50%
+  };
+
   return (
-    <div className="flex flex-col w-full">
+    <div className="flex flex-col w-full h-full">
       {/* Editor Toolbar */}
       <div className="flex flex-wrap items-center border-b bg-gray-50 p-2 gap-x-1">
         {/* Undo and Redo */}
@@ -286,14 +299,34 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
         >
           <Heading3Icon size={20} />
         </button>
+
+        <div className="w-px h-6 bg-gray-300 mx-2" />
+
+        {/* Zoom Controls */}
+        <button
+          onClick={handleZoomOut}
+          className="p-1 rounded hover:bg-gray-200"
+          aria-label="Zoom Out"
+        >
+          <MinusCircle size={18} /> {/* Use MinusCircle as Zoom Out */}
+        </button>
+        <span className="px-2">{Math.round(zoom * 100)}%</span>
+        <button
+          onClick={handleZoomIn}
+          className="p-1 rounded hover:bg-gray-200"
+          aria-label="Zoom In"
+        >
+          <PlusCircle size={18} /> {/* Use PlusCircle as Zoom In */}
+        </button>
       </div>
 
       {/* Editor Content with Page Visualization */}
       <div className="flex-grow overflow-y-auto bg-gray-200 p-2">
         {/* Wrap EditorContent with PageVisualization */}
-        <PageVisualization pageSize="A4">
+        <PageVisualization pageSize="A4" zoom={zoom}>
           <EditorContent
             editor={editor}
+            className="h-full w-full"
             style={{ caretColor: 'black' }}
           />
         </PageVisualization>
