@@ -8,7 +8,7 @@ import { api } from "../../../../../convex/_generated/api";
 import { cosineSimilarity } from "@/lib/similarity";
 import { GraphData, GraphLink, GraphNode } from "@/types/graph";
 import { Button } from "@/components/ui/button";
-import { CircleMinus, CirclePlus } from "lucide-react";
+import { CircleMinus, CirclePlus, RefreshCcw } from "lucide-react";
 // import { GUI } from "dat.gui"; // Now, type definitions are installed
 
 const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), { ssr: false });
@@ -30,6 +30,7 @@ const EmbeddingGraph: React.FC = () => {
   const [allEmbeddings, setAllEmbeddings] = useState<EmbeddingChunk[]>([]); // Accumulated embeddings
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
   const [linkStrength, setLinkStrength] = useState(1); // Link strength state
+  const [cursorHistory, setCursorHistory] = useState<(string | null)[]>([null]);
 
   const topK = 5; // Number of top similar nodes to connect
 
@@ -68,6 +69,7 @@ const EmbeddingGraph: React.FC = () => {
       console.log("Fetched Chunks:", data.chunks);
       setAllEmbeddings((prev) => [...prev, ...data.chunks]);
       setCursor(data.nextCursor);
+      setCursorHistory((prev) => [...prev, data.nextCursor]);
     } else if (allEmbeddings.length === 0) {
       console.log("No chunks fetched in this batch.");
     }
@@ -141,23 +143,36 @@ const EmbeddingGraph: React.FC = () => {
     };
   }, []);
 
-  // Function to load more embeddings
   const loadMore = () => {
-    if (cursor) {
-      setLimit((prev) => prev + 100); // Increase the limit by 100
+    const latestCursor = cursorHistory[cursorHistory.length - 1];
+    if (latestCursor) {
+      setLimit((prev) => prev + 100);
+    }
+  };
+  
+  const loadLess = () => {
+    if (cursorHistory.length > 1) { // Ensure there's more than the initial cursor
+      setCursorHistory((prev) => prev.slice(0, prev.length - 1));
+      setAllEmbeddings((prev) => prev.slice(0, prev.length - 100));
+      setLimit((prev) => Math.max(prev - 100, INITIAL_LIMIT));
+      setCursor(cursorHistory[cursorHistory.length - 2]); // Revert to previous cursor
     }
   };
 
-  // Function to load less embeddings
-  const loadLess = () => {
-    if (allEmbeddings.length > INITIAL_LIMIT) {
-      const newEmbeddings = allEmbeddings.slice(0, allEmbeddings.length - 100);
-      setAllEmbeddings(newEmbeddings);
-      setLimit((prev) => Math.max(prev - 100, INITIAL_LIMIT)); // Decrease limit but not below INITIAL_LIMIT
-
-      // Note: To properly manage the cursor, you might need to implement a cursor history stack.
-      // This example does not handle cursor reversal, which would require additional logic.
-    }
+  const handleRefresh = () => {
+    // Clear persisted data from sessionStorage
+    sessionStorage.removeItem("allEmbeddings");
+    sessionStorage.removeItem("graphData");
+    sessionStorage.removeItem("camera");
+    
+    // Reset state variables to initial values
+    setAllEmbeddings([]);
+    setGraphData({ nodes: [], links: [] });
+    setCursor(null);
+    setLimit(INITIAL_LIMIT);
+    
+    // Optionally, you can reload the page or refetch data
+    // window.location.reload();
   };
 
   // Display different states based on data fetching
@@ -197,7 +212,7 @@ const EmbeddingGraph: React.FC = () => {
         width={1180} // Adjust as needed or make responsive
         height={620} // Adjust as needed or make responsive
       />
-      <div className="border-t flex space-x-4 mt-4">
+      <div className="border-t flex space-x-2 mt-4">
         <Button
           variant={"outline"}
           onClick={loadLess}
@@ -213,6 +228,14 @@ const EmbeddingGraph: React.FC = () => {
           disabled={!cursor} // Disable if there's no more data to load
         >
           <CirclePlus />
+        </Button>
+        <Button
+          variant={"outline"}
+          onClick={handleRefresh}
+          className="mt-2 px-3 py-2 rounded"
+          title="Refresh Graph"
+        >
+          <RefreshCcw />
         </Button>
       </div>
     </div>
