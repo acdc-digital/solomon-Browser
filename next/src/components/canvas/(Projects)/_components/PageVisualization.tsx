@@ -22,7 +22,7 @@ const PageVisualization = ({
 
   return (
     <div
-      className="page-visualization-container flex justify-center items-center"
+      className="page-visualization-container flex justify-left items-center ml-10"
       style={{
         padding: pageMargin,
         overflow: 'auto',
