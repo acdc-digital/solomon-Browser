@@ -1,9 +1,7 @@
 // components/EmbeddingGraph.tsx
 // /Users/matthewsimon/Documents/Github/solomon-electron/next/src/components/canvas/(Admin)/_components/EmbeddingGraph.tsx
 
-// src/components/canvas/(Admin)/_components/EmbeddingGraph.tsx
-
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useQuery } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
@@ -35,25 +33,47 @@ const EmbeddingGraph: React.FC = () => {
 
   const topK = 5; // Number of top similar nodes to connect
 
+  const graphRef = useRef<any>(); // Reference to ForceGraph2D
+
   // Fetch embeddings with current limit and cursor
   const data = useQuery(api.chunks.getAllEmbeddings, { limit, cursor });
   const isLoading = data === undefined;
+
+  // Load persisted data and camera state on mount
+  useEffect(() => {
+    const savedEmbeddings = sessionStorage.getItem("allEmbeddings");
+    const savedGraphData = sessionStorage.getItem("graphData");
+    const savedCamera = sessionStorage.getItem("camera");
+
+    if (savedEmbeddings && savedGraphData) {
+      setAllEmbeddings(JSON.parse(savedEmbeddings));
+      setGraphData(JSON.parse(savedGraphData));
+
+      if (savedCamera && graphRef.current) {
+        const cameraState = JSON.parse(savedCamera);
+        graphRef.current.camera(cameraState);
+      }
+    }
+  }, []);
 
   // Log the query result for debugging
   useEffect(() => {
     console.log("Fetched Data:", data);
   }, [data]);
 
+  // Update embeddings and cursor when new data is fetched
   useEffect(() => {
-    if (data?.chunks && data.chunks.length > 0) {
+    // Only fetch if no data is loaded from sessionStorage
+    if (allEmbeddings.length === 0 && data?.chunks && data.chunks.length > 0) {
       console.log("Fetched Chunks:", data.chunks);
       setAllEmbeddings((prev) => [...prev, ...data.chunks]);
       setCursor(data.nextCursor);
-    } else {
+    } else if (allEmbeddings.length === 0) {
       console.log("No chunks fetched in this batch.");
     }
-  }, [data]);
+  }, [data, allEmbeddings.length]);
 
+  // Compute graph data whenever allEmbeddings change
   useEffect(() => {
     if (allEmbeddings.length === 0) return;
 
@@ -93,32 +113,33 @@ const EmbeddingGraph: React.FC = () => {
     setGraphData({ nodes, links });
   }, [allEmbeddings]);
 
-  // Optional: GUI controls
-  // const controlsRef = useRef<any>();
-
-  /*
+  // Persist graphData and allEmbeddings to sessionStorage whenever they change
   useEffect(() => {
-    const gui = new GUI();
-    controlsRef.current = { "Link Strength": 1 };
-    gui
-      .add(controlsRef.current, "Link Strength", 0.1, 5)
-      .onChange((value: number) => {
-        // Implement any dynamic changes based on controls
-        // For example, you can adjust link strength in the graph
-        // This requires accessing the graph instance and updating link styles
-        // Here's a conceptual example:
+    if (allEmbeddings.length > 0) {
+      sessionStorage.setItem("allEmbeddings", JSON.stringify(allEmbeddings));
+      sessionStorage.setItem("graphData", JSON.stringify(graphData));
+    }
+  }, [allEmbeddings, graphData]);
 
-        // graphRef.current?.links.forEach((link: any) => {
-        //   link.width = link.similarity * value;
-        // });
-        // graphRef.current?.refresh();
-      });
+  // Save camera state to sessionStorage when the graph engine stops (after layout)
+  const handleEngineStop = () => {
+    if (graphRef.current) {
+      const camera = graphRef.current.camera();
+      sessionStorage.setItem("camera", JSON.stringify(camera));
+    }
+  };
 
+  // Optionally, save camera state before unload
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      handleEngineStop();
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
     return () => {
-      gui.destroy();
+      window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, []);
-  */
 
   // Function to load more embeddings
   const loadMore = () => {
@@ -151,6 +172,7 @@ const EmbeddingGraph: React.FC = () => {
   return (
     <div className="w-full h-full">
       <ForceGraph2D
+        ref={graphRef}
         graphData={graphData}
         nodeLabel="label"
         nodeAutoColorBy="group"
@@ -159,16 +181,19 @@ const EmbeddingGraph: React.FC = () => {
         linkDirectionalParticleWidth={(link) => link.similarity * linkStrength} // Dynamic particle width
         backgroundColor="gray-50"
         nodeCanvasObject={(node, ctx, globalScale) => {
-          const label = node.label;
+          // Draw the node
           const fontSize = 12 / globalScale;
           ctx.font = `${fontSize}px Sans-Serif`;
           ctx.fillStyle = node.color;
           ctx.beginPath();
-          ctx.arc(node.x!, node.y!, 5, 0, 2 * Math.PI, false);
+          ctx.arc(node.x!, node.y!, 8, 0, 2 * Math.PI, false); // Increased radius: 8
           ctx.fill();
-          ctx.fillStyle = "black";
-          ctx.fillText(label, node.x! + 6, node.y! + 3);
+
+          // Removed the following lines to disable text on nodes
+          // ctx.fillStyle = "black";
+          // ctx.fillText(label, node.x! + 6, node.y! + 3);
         }}
+        onEngineStop={handleEngineStop} // Save camera state when the graph layout is done
         width={1180} // Adjust as needed or make responsive
         height={620} // Adjust as needed or make responsive
       />
