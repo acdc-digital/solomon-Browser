@@ -26,6 +26,8 @@ import {
   MinusCircle, // Alternative for Zoom Out
 } from 'lucide-react';
 import { useEditor, EditorContent } from '@tiptap/react';
+
+import Gapcursor from '@tiptap/extension-gapcursor'
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import Highlight from '@tiptap/extension-highlight';
@@ -67,6 +69,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
         orderedList: false,
         listItem: false,
       }),
+      Gapcursor,
       BulletList,
       OrderedList,
       ListItem,
@@ -310,7 +313,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
         >
           <MinusCircle size={18} /> {/* Use MinusCircle as Zoom Out */}
         </button>
-        <span className="px-2">{Math.round(zoom * 100)}%</span>
+        <span className="px-1">{Math.round(zoom * 100)}%</span>
         <button
           onClick={handleZoomIn}
           className="p-1 rounded hover:bg-gray-200"

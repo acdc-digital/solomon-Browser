@@ -41,6 +41,7 @@ export default defineSchema({
         pageNumber: v.optional(v.number()),
         numTokens: v.optional(v.number()),
         snippet: v.optional(v.string()),
+        module: v.optional(v.string()),
       })
     ),
     embedding: v.optional(v.array(v.float64())), // Store individual chunk embeddings

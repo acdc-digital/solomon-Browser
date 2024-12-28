@@ -2,7 +2,7 @@
 // /Users/matthewsimon/Documents/Github/solomon-electron/next/convex/chunks.ts
 
 import { v } from "convex/values";
-import { mutation } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { v4 as uuidv4 } from 'uuid'; 
 import pLimit from 'p-limit'; // Import p-limit for concurrency control
@@ -19,9 +19,63 @@ interface ChunkDoc {
     pageNumber?: number;
     numTokens?: number;
     snippet?: string;
+    module?: string; // Added 'module' field
   };
+  embedding?: number[]; // Ensure embedding is optional
   chunkNumber?: number;
 }
+
+// Define the shape of the data to be returned
+interface EmbeddingChunk {
+  id: string;
+  pageContent: string;
+  embedding: number[];
+  metadata?: {
+    snippet: string | null;
+    module: string | null;
+  };
+}
+
+/**
+ * Query to fetch a limited number of chunks that have embeddings.
+ * Supports pagination by accepting an optional `cursor`.
+ */
+export const getAllEmbeddings = query(async (
+  ctx,
+  { limit, cursor }: { limit: number; cursor?: string | null }
+): Promise<{ chunks: EmbeddingChunk[]; nextCursor: string | null }> => {
+  // Initialize the query using the 'by_uniqueChunkId' index for ordering
+  let q = ctx.db.query("chunks")
+    .withIndex("by_uniqueChunkId") // Use the specified index
+    .order("asc"); // Order by 'uniqueChunkId' in ascending order
+
+  // If a cursor is provided, filter to items after the cursor
+  if (cursor) {
+    q = q.filter(c => c.gt("uniqueChunkId", cursor)); // Apply filter for cursor-based pagination
+  }
+
+  // Filter out chunks without embeddings
+  q = q.filter(c => c.neq("embedding", null));
+
+  // Apply the limit
+  const chunks = await q.take(limit); // Removed .collect()
+
+  // Determine the next cursor
+  const nextCursor = chunks.length === limit ? chunks[chunks.length - 1].uniqueChunkId : null;
+
+  return {
+    chunks: chunks.map((chunk: ChunkDoc) => ({
+      id: chunk.uniqueChunkId,
+      pageContent: chunk.pageContent,
+      embedding: chunk.embedding as number[], // Ensure embedding is defined
+      metadata: {
+        snippet: chunk.metadata?.snippet || 'No snippet available', // Map snippet
+        module: chunk.metadata?.module || null, // Ensure 'module' exists in metadata
+      },
+    })),
+    nextCursor,
+  };
+});
 
 // Mutation to insert a single chunk
 export const insertChunk = mutation({
@@ -68,8 +122,10 @@ export const insertChunks = mutation({
             pageNumber: v.optional(v.number()),
             numTokens: v.optional(v.number()),
             snippet: v.optional(v.string()),
+            module: v.optional(v.string()), // Added 'module' field
           })
         ),
+        embedding: v.optional(v.array(v.float64())), // Ensure embedding is optional
         chunkNumber: v.optional(v.number()),
       })
     ),
@@ -88,7 +144,9 @@ export const insertChunks = mutation({
           pageNumber?: number;
           numTokens?: number;
           snippet?: string;
+          module?: string;
         };
+        embedding?: number[];
         chunkNumber?: number;
       }[];
     }
@@ -98,6 +156,7 @@ export const insertChunks = mutation({
       uniqueChunkId: chunk.uniqueChunkId, // Use the provided UUID
       pageContent: chunk.pageContent,
       metadata: chunk.metadata || {},
+      embedding: chunk.embedding ?? undefined, // Optional
       chunkNumber: chunk.chunkNumber ?? undefined,
     }));
 
