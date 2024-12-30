@@ -205,7 +205,7 @@ function getAdaptiveChunkParams(totalChars: number) {
     return { chunkSize: 1000, chunkOverlap: 200 };
   } else {
     // large doc
-    return { chunkSize: 2000, chunkOverlap: 200 };
+    return { chunkSize: 1500, chunkOverlap: 200 }; // Further reduced chunkSize
   }
 }
 
@@ -269,6 +269,28 @@ async function runOcrOnPage(pdfPath: string, pageIndex: number): Promise<string>
 }
 
 /**
+ * Utility function to implement exponential backoff retries with jitter.
+ * @param fn The asynchronous function to retry.
+ * @param retries Number of retries.
+ * @param delay Initial delay in milliseconds.
+ */
+async function retryWithBackoff(fn: () => Promise<any>, retries: number, delay: number): Promise<any> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (retries === 0) {
+      throw error;
+    }
+    // Add jitter by randomizing the delay
+    const jitter = Math.floor(Math.random() * 100);
+    const totalDelay = delay + jitter;
+    console.warn(`Operation failed. Retrying in ${totalDelay}ms... (${retries} retries left)`);
+    await new Promise(res => setTimeout(res, totalDelay));
+    return retryWithBackoff(fn, retries - 1, delay * 2);
+  }
+}
+
+/**
  * The main POST handler that:
  * 1) Fetches the PDF
  * 2) Loads text with PDFLoader
@@ -311,7 +333,7 @@ export async function POST(request: Request) {
     // Step 4: Invoke Convex Mutation to Get the PDF URL
     // -------------------------
     console.log('Invoking Convex mutation: projects:getFileUrl');
-    const response = await convex.mutation('projects:getFileUrl', { fileId });
+    const response = await retryWithBackoff(() => convex.mutation('projects:getFileUrl', { fileId }), 5, 1000);
     if (!response || !response.url) {
       console.error('No URL returned for PDF');
       return NextResponse.json(
@@ -326,7 +348,7 @@ export async function POST(request: Request) {
     // Step 5: Fetch the PDF
     // -------------------------
     console.log('Fetching the PDF from the URL');
-    const pdfResponse = await fetch(response.url);
+    const pdfResponse = await fetch(response.url, { timeout: 120000 }); // 2-minute timeout
     if (!pdfResponse.ok) {
       console.error('Failed to fetch PDF:', pdfResponse.statusText);
       return NextResponse.json(
@@ -491,7 +513,11 @@ export async function POST(request: Request) {
     // Step 8: Retrieve parentProjectId from documentId
     // -------------------------
     console.log('Retrieving parentProjectId from documentId:', documentId);
-    const parentProjectId = await convex.query('projects:getParentProjectId', { documentId });
+    const parentProjectId = await retryWithBackoff(
+      () => convex.query('projects:getParentProjectId', { documentId }),
+      5, // Increased number of retries
+      1000 // Increased initial delay to 1s
+    );
     if (!parentProjectId) {
       console.error(`No parentProjectId found for documentId: ${documentId}`);
       return NextResponse.json(
@@ -502,9 +528,10 @@ export async function POST(request: Request) {
     console.log('Retrieved parentProjectId:', parentProjectId);
 
     // -------------------------
-    // Step 9: Insert Chunks into the chunks Table
+    // Step 9: Insert Chunks into the chunks Table (Batch Insertion)
     // -------------------------
     console.log('Inserting chunks into the database');
+
     try {
       // Prepare chunk docs for batch insert
       const chunkDocs = docChunks.map((chunk) => ({
@@ -521,19 +548,54 @@ export async function POST(request: Request) {
         },
       }));
 
-      // **Use insertChunks mutation to insert all chunks**
-      await convex.mutation('chunks:insertChunks', {
-        parentProjectId,
-        chunks: chunkDocs,
-      });
+      // Define constants for batching
+      const BATCH_SIZE = 250; // Further reduced number of chunks per batch
+      const CONCURRENCY_LIMIT = 1; // Further reduced concurrency to 1
 
-      console.log('All chunks inserted successfully.');
+      // Function to insert a batch of chunks with retry
+      const insertBatch = async (batch: typeof chunkDocs) => {
+        await retryWithBackoff(
+          () => convex.mutation('chunks:insertChunks', {
+            parentProjectId,
+            chunks: batch,
+          }),
+          5, // Increased number of retries
+          1000 // Increased initial delay to 1s
+        );
+        console.log(`Successfully inserted batch of ${batch.length} chunks.`);
+      };
+
+      // Split chunkDocs into batches
+      const batches = [];
+      for (let i = 0; i < chunkDocs.length; i += BATCH_SIZE) {
+        const batch = chunkDocs.slice(i, i + BATCH_SIZE);
+        batches.push(batch);
+      }
+
+      console.log(`Total batches to insert: ${batches.length}`);
+
+      // Initialize concurrency limiter
+      const limit = pLimit(CONCURRENCY_LIMIT);
+
+      // Execute batch insertions with concurrency control
+      await Promise.all(
+        batches.map((batch, index) =>
+          limit(() =>
+            insertBatch(batch).catch((error) => {
+              console.error(`Error inserting batch ${index + 1}:`, error);
+              // Optionally, implement further handling like alerting or halting
+            })
+          )
+        )
+      );
+
+      console.log('All batches inserted successfully.');
 
       // (Optional) Mark doc as processed
       await convex.mutation('projects:updateProcessingStatus', {
         documentId,
         isProcessing: false, // done inserting
-        isProcessed: true,   // if you store this at the project level
+        isProcessed: true,    // if you store this at the project level
         processedAt: new Date().toISOString(),
       });
     } catch (insertError: any) {
@@ -556,7 +618,7 @@ export async function POST(request: Request) {
     console.log('Generating embeddings for the chunks');
     const openAIEmbeddings = new OpenAIEmbeddings({
       openAIApiKey: process.env.OPENAI_API_KEY,
-      modelName: "text-embedding-ada-002", // Corrected model name
+      modelName: "text-embedding-3-small", // Corrected model name
     });
 
     // Get text from each chunk to embed
@@ -564,7 +626,11 @@ export async function POST(request: Request) {
     let chunkEmbeddings: number[][] = [];
 
     try {
-      chunkEmbeddings = await openAIEmbeddings.embedDocuments(textsForEmbedding);
+      chunkEmbeddings = await retryWithBackoff(
+        () => openAIEmbeddings.embedDocuments(textsForEmbedding),
+        5, // Increased number of retries
+        1000 // Increased initial delay to 1s
+      );
       console.log('Generated Embeddings:', chunkEmbeddings.length);
       console.log('Embedding Dimensions:', chunkEmbeddings[0].length); // Should be 1536
     } catch (embeddingError: any) {
@@ -579,32 +645,56 @@ export async function POST(request: Request) {
     });
 
     // -------------------------
-    // Step 11: Update Each Chunk with Its Embedding
+    // Step 11: Update Each Chunk with Its Embedding (Batch Insertion)
     // -------------------------
     console.log('Updating chunk embeddings in the database');
 
-    // Define concurrency limit (e.g., 5 simultaneous mutations)
-    const limit = pLimit(5);
-
     try {
-      await Promise.all(
-        chunkEmbeddings.map((embedding, index) => {
-          const uniqueChunkId = docChunks[index].uniqueChunkId; 
-          console.log(`Updating embedding for Chunk with ID ${uniqueChunkId}:`, {
-            embeddingSnippet: embedding.slice(0, 5), // Log first 5 values
-          });
+      // Define constants for batching
+      const EMBEDDING_BATCH_SIZE = 250; // Further reduced batch size
+      const EMBEDDING_CONCURRENCY_LIMIT = 1; // Further reduced concurrency
 
-          return limit(() =>
-            convex.mutation('chunks:updateChunkEmbedding', {
-              uniqueChunkId: uniqueChunkId, // Use UUID
+      // Prepare embedding update batches
+      const embeddingBatches = [];
+      for (let i = 0; i < chunkEmbeddings.length; i += EMBEDDING_BATCH_SIZE) {
+        const batchEmbeddings = chunkEmbeddings.slice(i, i + EMBEDDING_BATCH_SIZE);
+        const batchUniqueChunkIds = docChunks
+          .slice(i, i + EMBEDDING_BATCH_SIZE)
+          .map((chunk) => chunk.uniqueChunkId);
+        embeddingBatches.push({ embeddings: batchEmbeddings, uniqueChunkIds: batchUniqueChunkIds });
+      }
+
+      console.log(`Total embedding batches to update: ${embeddingBatches.length}`);
+
+      // Function to update a batch of embeddings with retry
+      const updateEmbeddingBatch = async (batch: { embeddings: number[][]; uniqueChunkIds: string[] }) => {
+        const mutationPromises = batch.embeddings.map((embedding, index) =>
+          retryWithBackoff(
+            () => convex.mutation('chunks:updateChunkEmbedding', {
+              uniqueChunkId: batch.uniqueChunkIds[index],
               embedding: embedding,
-            }).then(() => {
-              console.log(`Successfully updated embedding for Chunk with ID ${uniqueChunkId}`);
-            }).catch((error) => {
-              console.error(`Failed to update embedding for Chunk with ID ${uniqueChunkId}:`, error);
+            }),
+            5, // Increased number of retries
+            1000 // Increased initial delay to 1s
+          )
+        );
+        await Promise.all(mutationPromises);
+        console.log(`Successfully updated a batch of ${batch.embeddings.length} embeddings.`);
+      };
+
+      // Initialize concurrency limiter
+      const embeddingLimit = pLimit(EMBEDDING_CONCURRENCY_LIMIT);
+
+      // Execute batch embedding updates with concurrency control
+      await Promise.all(
+        embeddingBatches.map((batch, index) =>
+          embeddingLimit(() =>
+            updateEmbeddingBatch(batch).catch((error) => {
+              console.error(`Error updating embedding batch ${index + 1}:`, error);
+              // Optionally, implement further handling like alerting or halting
             })
-          );
-        })
+          )
+        )
       );
 
       console.log('All chunk embeddings updated successfully.');
