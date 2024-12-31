@@ -1,3 +1,6 @@
+// Application Layout
+// /Users/matthewsimon/Documents/Github/solomon-electron/next/src/app/layout.tsx
+
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { ThemeProvider } from "@/components/providers/theme-provider"

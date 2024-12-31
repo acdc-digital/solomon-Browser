@@ -14,8 +14,13 @@ import { FileList } from "./_components/FileList";
 import { DocumentData } from "@/types/DocumentData";
 
 import useChatStore from '@/lib/store/chatStore';
-import FilePreview from "./_components/FilePreview";
+// import FilePreview from "./_components/FilePreview";
 import TipTapEditor from "./_components/TipTapEditor";
+import dynamic from 'next/dynamic';
+
+const FilePreviewNoSSR = dynamic(() => import('./_components/FilePreview'), {
+  ssr: false,
+});
 
 // Fetch project data based on projectId
 const Projects: React.FC<{ projectId: string }> = ({ projectId }) => {
@@ -129,7 +134,7 @@ const Projects: React.FC<{ projectId: string }> = ({ projectId }) => {
           {/* Preview */}
           {activeView === "preview" && selectedFile && (
             <div className="ml-3 mr-6 border-b border-l border-r">
-              <FilePreview />
+              <FilePreviewNoSSR />
             </div>
       )}
       </div>

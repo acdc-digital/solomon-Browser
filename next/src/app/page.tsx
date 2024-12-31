@@ -1,3 +1,6 @@
+// Page
+// /Users/matthewsimon/Documents/Github/solomon-electron/next/src/app/page.tsx
+
 'use client'
 
 import Image from "next/image";
