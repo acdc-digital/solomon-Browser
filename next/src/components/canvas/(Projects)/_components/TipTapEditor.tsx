@@ -147,7 +147,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
   };
 
   return (
-    <div className="flex flex-col w-full h-full">
+    <div className="h-[calc(87vh-100px)] overflow-hidden">
       {/* Editor Toolbar */}
       <div className="flex flex-wrap items-center border-b bg-gray-50 p-2 gap-x-1">
         {/* Undo and Redo */}
@@ -324,8 +324,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
       </div>
 
       {/* Editor Content with Page Visualization */}
-      <div className="flex-grow overflow-y-auto bg-gray-200 p-2">
-        {/* Wrap EditorContent with PageVisualization */}
+      <div className="flex-grow bg-gray-200 p-2 h-full">
         <PageVisualization pageSize="A4" zoom={zoom}>
           <EditorContent
             editor={editor}

@@ -1,3 +1,6 @@
+// Files Dashbaord
+// /Users/matthewsimon/Documents/Github/solomon-electron/next/src/components/canvas/(Admin)/Admin.tsx
+
 'use client'
 
 import React from "react";
@@ -11,26 +14,14 @@ const Files = () => {
   const { user } = useUser();
 
   return (
-    <div className="mt-24 flex flex-col h-full items-center space-y-4 overflow-hidden">
-      <h2 className="text-lg font-medium pb-4">
-        There are Currently No Files.
-      </h2>
-
-     <Image
-     src="/undraw_relaunch_day.svg"
-     height="325"
-     width="325"
-     alt="To the moon."
-     className="pb-4"
-     />
-
-     <Button
-     className="border-black"
-      variant={"outline"}
-     >
-      <PlusCircle className="h-4 w-4 m-2" />
-      Create New Project
-     </Button>
+    <div className="flex flex-col h-screen overflow-y">
+      <p className="mt-6 text-center"> Search </p>
+      <div className="flex flex-col items-center gap-x-4 border rounded-t-lg bg-gray-50 mt-6 ml-3 mr-3 p-4 pl-4 py-2 justify-end">
+          <p> Display Files List for ALL Files in Convex Database</p>
+      </div>
+      <div>
+        <p className="text-center">content</p>
+      </div>
     </div>
   );
 }

@@ -80,7 +80,7 @@ const Projects: React.FC<{ projectId: string }> = ({ projectId }) => {
           </div>
 
           {/* Canvas State-Change Header */}
-          <div className="flex flex-row gap-x-4 border rounded-t-lg bg-gray-50 ml-3 mr-6 p-4 pl-4 py-2 justify-end">
+          <div className="flex flex-row gap-x-4 border rounded-t-lg bg-gray-50 ml-3 mr-3 p-4 pl-4 py-2 justify-end">
               <Button className={`text-gray-600 ${
                       activeView === "editor" ? "border-b border-gray-500" : ""
                       }`}
@@ -117,7 +117,7 @@ const Projects: React.FC<{ projectId: string }> = ({ projectId }) => {
           {/* State-Change Components */}
           {/* Editor */}
           {activeView === "editor" && (
-            <div className="flex flex-col flex-1 ml-3 mr-6 border-b border-l border-r">
+            <div className="flex flex-col flex-1 ml-3 mr-3 border-b border-l border-r">
             <TipTapEditor
             initialContent={project.content}
             onChange={onChange}

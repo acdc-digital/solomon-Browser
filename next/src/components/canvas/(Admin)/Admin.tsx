@@ -1,3 +1,6 @@
+// Admin Dashbaord
+// /Users/matthewsimon/Documents/Github/solomon-electron/next/src/components/canvas/(Admin)/Admin.tsx
+
 'use client'
 
 import React from "react";
@@ -13,7 +16,7 @@ const Admin = () => {
 
   return (
     <div className="flex flex-col h-screen overflow-y">
-      <div className="flex flex-col items-center gap-x-4 border rounded-t-lg bg-gray-50 mt-6 ml-3 mr-6 p-4 pl-4 py-2 justify-end">
+      <div className="flex flex-col items-center gap-x-4 border rounded-t-lg bg-gray-50 mt-6 ml-3 mr-3 p-4 pl-4 py-2 justify-end">
           <EmbeddingGraph />
       </div>
     </div>

@@ -12,20 +12,22 @@ interface PageVisualizationProps {
 
 const PageVisualization = ({
   pageSize,
-  pageMargin = '20px auto',
+  pageMargin = '20px',
   zoom,
   children,
 }: PageVisualizationProps) => {
-  const dimensions = pageSize === 'A4'
-    ? { width: 595, height: 842 } // A4 in pixels at 72 DPI
-    : { width: 612, height: 792 }; // Letter in pixels at 72 DPI
+  // Base dimensions in px (at ~72 DPI):
+  const dimensions =
+    pageSize === 'A4'
+      ? { width: 595, height: 842 }  // A4
+      : { width: 612, height: 792 }; // Letter
 
   return (
     <div
-      className="page-visualization-container flex justify-left items-center ml-10"
+      className="page-visualization-container flex justify-center items-start w-full h-full overflow-auto"
       style={{
+        // Use `pageMargin` as padding, so there's space around the page.
         padding: pageMargin,
-        overflow: 'auto',
       }}
     >
       <div
@@ -33,19 +35,16 @@ const PageVisualization = ({
         style={{
           width: dimensions.width,
           height: dimensions.height,
+          // Scale around the horizontal center, pinned at the top:
+          transformOrigin: 'top center',
           transform: `scale(${zoom})`,
-          transformOrigin: 'top left',
           backgroundColor: 'white',
-          overflow: 'hidden',
           position: 'relative',
+          // We rely on the outer container for scrolling, so no overflow needed here
         }}
       >
         <div
-          className="editor-content-wrapper p-4 overflow-auto h-full"
-          style={{
-            width: '100%',
-            height: '100%',
-          }}
+          className="editor-content-wrapper w-full h-full p-4 overflow-auto"
         >
           {children}
         </div>

@@ -11,16 +11,18 @@ import {
 import { useSettings } from "@/hooks/use-settings";
 import { Label } from "@/components/ui/label";
 import { ModeToggle } from "@/components/mode-toggle";
-import { useState } from "react";
 import { InfinityIcon } from "lucide-react";
 import { Button } from "../ui/button";
+import { useEditorStore } from "@/lib/store/editorStore"; // Import Zustand store
 
 export const SettingsModal = () => {
   const settings = useSettings();
-  const [isUsageOpen, setIsUsageOpen] = useState(false);
+  const setActiveComponent = useEditorStore((state) => state.setActiveComponent); // Access setActiveComponent from Zustand
 
-  const openUsageDialog = () => setIsUsageOpen(true);
-  const closeUsageDialog = () => setIsUsageOpen(false);
+  const navigateToUsers = () => {
+    setActiveComponent("Users"); // Set the active component to "Users"
+    settings.onClose(); // Close the Settings Modal
+  };
 
   return (
     <>
@@ -57,7 +59,8 @@ export const SettingsModal = () => {
               <Button
                 variant="outline"
                 size="icon"
-                onClick={openUsageDialog}
+                onClick={navigateToUsers} // Updated onClick handler
+                aria-label="View Usage Statistics" // Accessibility improvement
               >
                 <InfinityIcon />
               </Button>
@@ -66,18 +69,8 @@ export const SettingsModal = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Usage Statistics Dialog */}
-      <Dialog open={isUsageOpen} onOpenChange={setIsUsageOpen}>
-        <DialogContent>
-          <DialogHeader className="border-b pb-3">
-            <h2 className="text-lg font-medium">Usage Statistics</h2>
-          </DialogHeader>
-          <div className="mt-4">
-            {/* Placeholder for usage statistics */}
-            <p>Your usage statistics will appear here.</p>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Removed Usage Statistics Dialog */}
+      {/* Since we're navigating within the canvas, this separate dialog is no longer needed */}
     </>
   );
 };
