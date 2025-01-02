@@ -98,7 +98,7 @@ export default function Chat({ projectId }: { projectId: string }) {
               className="flex flex-col gap-2 text-black p-2"
             >
               {/* "You:" label */}
-              <div className="text-sm items-end text-right">You:</div>
+              <div className="text-sm items-end text-right text-gray-500">You:</div>
 
               {/* User message in a light "cloud box" */}
               <div className="text-right">
@@ -115,7 +115,7 @@ export default function Chat({ projectId }: { projectId: string }) {
                 "response" in entry &&
                 entry.response && (
                   <>
-                    <div className="text-sm mt-2">Solomon:</div>
+                    <div className="text-sm mt-2 text-gray-500">Solomon:</div>
                     <div className="ml-2">{entry.response}</div>
                   </>
                 )
@@ -138,13 +138,19 @@ export default function Chat({ projectId }: { projectId: string }) {
           ref={textareaRef}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              onSubmit(message);
+            }
+          }}
           className="flex-1 form-input px-4 bg-gray-100 border border-black rounded-md
-                     focus:outline-none focus:ring-0 resize-none"
+                     focus:outline-none focus:ring-0 resize-none leading-normal"
           placeholder="Type your message..."
           style={{ overflow: "auto", maxHeight: "200px" }}
         />
 
-        <button
+        {/* <button
           type="submit"
           disabled={isLoading}
           className="ml-2 px-3 bg-gray-700 text-white rounded-md hover:bg-gray-500 border-black"
@@ -154,7 +160,7 @@ export default function Chat({ projectId }: { projectId: string }) {
           ) : (
             <ArrowUp size={20} />
           )}
-        </button>
+        </button> */} 
       </form>
     </div>
   );

@@ -33,7 +33,7 @@ export default function ChatLayout() {
                     </div>
                 </div>
             ) : (
-                <p className='text-center text-gray-600'>Create a project to continue.</p>
+                <p className='text-center text-gray-600'>Choose a project to continue.</p>
             )}
         </div>
     );
