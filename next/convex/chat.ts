@@ -30,7 +30,7 @@ const openai = new OpenAI({
 // -----------------------------
 async function summarizeChunk(chunkText: string): Promise<string> {
   // If the chunk is short, just return it as-is.
-  if (chunkText.length < 1000) {
+  if (chunkText.length < 500) {
     return chunkText;
   }
 
@@ -154,55 +154,66 @@ export const getAllEntries = query({
 // Action to handle user messages
 // Enhanced Action with Summaries + Metadata + Combined Search
 // -----------------------------
+// chat.ts
 export const handleUserAction = action({
   args: {
     message: v.string(),
     projectId: v.id("projects"),
   },
-  handler: async (
-    ctx,
-    { message, projectId }
-  ): Promise<HandleUserActionResponse> => {
+  handler: async (ctx, { message, projectId }): Promise<HandleUserActionResponse> => {
     try {
+      // Step 0: Fetch the "document content" from the DB
+      const { content: docContent } = await ctx.runQuery(api.projects.getDocumentContent, {
+        documentId: projectId,
+      });
+
+      // (Optional) Summarize or trim docContent if it's very large:
+      // const docContentShort = docContent.length > 1000
+      //   ? await summarizeChunk(docContent)
+      //   : docContent;
+
       // Step 1: Retrieve chunks from both embeddings + text search
       const results: SerializedChunk[] = await ctx.runAction(api.search.combinedSearchChunks, {
         query: message,
         projectId,
-        topK: 20,
+        topK: 10,
       });
+
       console.log("Combined (embedding + text) Results:", results);
 
-      // Step 2: Summarize and combine chunk content + METADATA
+      // Step 2: Summarize and combine chunk content + metadata
       const contextPromises = results.map(async (chunk) => {
         const { pageNumber, docTitle, docAuthor, headings } = chunk.metadata || {};
         const possiblySummarized = await summarizeChunk(chunk.pageContent);
 
         return `
-[Chunk ID: ${chunk._id}]
-Page ${pageNumber || "?"} | Title: ${docTitle || "Untitled"} | Author: ${docAuthor || "Unknown"}
-Headings: ${headings?.join(", ") || "None"}
----
-${possiblySummarized}
+        [Chunk ID: ${chunk._id}]
+        Page ${pageNumber || "?"} | Title: ${docTitle || "Untitled"} | Author: ${docAuthor || "Unknown"}
+        Headings: ${headings?.join(", ") || "None"}
+        ---
+        ${possiblySummarized}
         `.trim();
       });
 
       const contextArray = await Promise.all(contextPromises);
-      const contextText = contextArray.join("\n\n");
+      const chunkContextText = contextArray.join("\n\n");
 
-      // Step 3: Construct the prompt for OpenAI with context
+      // Step 3: Construct the prompt for OpenAI with BOTH:
+      //   1. The single-document content from getDocumentContent
+      //   2. The chunk-based context
       const systemPrompt = `
-You are a helpful assistant. The user asked: "${message}"
+      You are a helpful assistant. The user asked: "${message}"
 
-You have the following context from relevant documents, with their headings and metadata.
-Use it only if relevant. When referencing content, note the chunk ID or page number.
+      Here is additional context provided by the User:
+      ${docContent}
 
-Context:
-${contextText}
+      Below is chunk-based context from relevant documents (with headings/metadata):
+      ${chunkContextText}
 
-Instructions:
-1) Provide an answer based on the context if relevant.
-2) If the context is insufficient, indicate that you lack enough info.
-3) Cite relevant chunk IDs or page numbers if referencing specific text.
+      Instructions:
+      1) Provide an answer based on the context if relevant.
+      2) If the context is insufficient, indicate that you lack enough info.
+      3) Cite relevant chunk IDs or page numbers if referencing specific text.
       `.trim();
 
       console.log("System Prompt for OpenAI:", systemPrompt);

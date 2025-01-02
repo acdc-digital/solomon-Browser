@@ -277,6 +277,23 @@ export const getDocument = query({
 	},
   });
 
+  export const getDocumentContent = query({
+	args: {
+	  documentId: v.id("projects"),
+	},
+	handler: async (ctx, { documentId }) => {
+	  // Fetch the document from the `projects` table
+	  const doc = await ctx.db.get(documentId);
+	  if (!doc) {
+		throw new Error(`Document with ID ${documentId} not found`);
+	  }
+	  // Return plain text
+	  return {
+		content: doc.content ?? "",
+	  };
+	},
+  });
+
   export const updateDocumentProcessed = mutation({
 	args: {
 	  documentId: v.id("projects"),

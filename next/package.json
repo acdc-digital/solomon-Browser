@@ -61,6 +61,7 @@
     "dotenv": "^16.4.5",
     "emoji-mart": "^5.5.2",
     "framer-motion": "^11.0.20",
+    "html-to-text": "^9.0.5",
     "langchain": "^0.3.6",
     "lucide-react": "^0.360.0",
     "ml-kmeans": "^6.0.0",
@@ -93,6 +94,7 @@
   },
   "devDependencies": {
     "@types/dat.gui": "^0.7.13",
+    "@types/html-to-text": "^9.0.4",
     "@types/node": "^20",
     "@types/pdfjs-dist": "^2.10.378",
     "@types/react": "18.2.67",
