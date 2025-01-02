@@ -208,19 +208,23 @@ export const updateProcessingStatus = mutation({
 	},
 	handler: async (ctx, args) => {
 	  const updateFields: Partial<Doc<"projects">> = {};
-
+  
 	  if (args.isProcessing !== undefined) {
 		updateFields.isProcessing = args.isProcessing;
 	  }
-
+  
+	  if (args.isProcessed !== undefined) {  // Added handling for isProcessed
+		updateFields.isProcessed = args.isProcessed;
+	  }
+  
 	  if (args.processedAt !== undefined) {
 		updateFields.processedAt = args.processedAt;
 	  }
-
+  
 	  if (args.progress !== undefined) {
 		updateFields.progress = args.progress;
 	  }
-
+  
 	  await ctx.db.patch(args.documentId, updateFields);
 	},
   });
@@ -266,7 +270,6 @@ export const getFileUrl = mutation({
 	},
   }); */}
 
-// Additional helper functions you'll need to add to your Convex schema
 export const getDocument = query({
 	args: { documentId: v.id("projects") },
 	handler: async (ctx, args) => {

@@ -15,7 +15,8 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   RotateCwIcon,
-} from "lucide-react"; // Example Lucide icons
+  Highlighter,
+} from "lucide-react"; 
 import "react-pdf/dist/esm/Page/AnnotationLayer.css";
 import "react-pdf/dist/esm/Page/TextLayer.css";
 import { Button } from "@/components/ui/button";
@@ -102,6 +103,13 @@ const FilePreview: React.FC = () => {
     );
   };
 
+  // Highlighting
+  const [isHighlighting, setIsHighlighting] = useState(false);
+
+  const toggleHighlight = () => {
+  setIsHighlighting((prev) => !prev);
+  };
+
   return (
     <div className="flex flex-col h-[calc(87vh-100px)] overflow-hidden">
       {/* Toolbar */}
@@ -168,14 +176,22 @@ const FilePreview: React.FC = () => {
             <ChevronRightIcon className="h-4 w-4" />
           </button>
         </div>
+
+        <div className="w-px h-6 bg-gray-300 mx-2" />
+
+        {/* Highlighter toggle */}
+        <div>
+          <button
+            onClick={toggleHighlight}
+            className="bg-gray-200 p-2 hover:bg-gray-300 rounded"
+            aria-label="Toggle Highlight"
+          >
+            <Highlighter className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {/* Content Area */}
-      {/* 
-         1) Make this container flex with justify-center, items-start,
-            and a darker background.
-         2) We place the PDF inside a white box to simulate a "page."
-      */}
       <div className="flex-1 flex overflow-auto justify-center items-start bg-gray-300 p-4">
         {isLoading && <p className="text-white">Loading PDF...</p>}
         {error && <p className="text-red-400">{error}</p>}

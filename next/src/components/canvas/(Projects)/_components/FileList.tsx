@@ -17,7 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useEditorStore } from "@/lib/store/editorStore";
 import { DocumentData } from "@/types/DocumentData";
 import { Button } from "@/components/ui/button"; // Ensure Button is imported
-import { Loader2 } from "lucide-react"; // Import Loader2 from Lucide Icons
+import { Loader2, Check } from "lucide-react"; // Import Loader2 and Check from Lucide Icons
 
 interface FileListProps {
   projectId: string;
@@ -43,13 +43,15 @@ export const FileList: React.FC<FileListProps> = ({ projectId }) => {
   }
 
   const processedDocuments = documents.map((doc) => {
-    const fileTypeMatch = doc.documentTitle.match(/\.(\w+)$/);
-    const fileType = fileTypeMatch ? `.${fileTypeMatch[1]}` : "Unknown";
-    const createdAt = new Date(doc.createdAt);
+    const fileTypeMatch = doc.documentTitle?.match(/\.(\w+)$/i);
+    console.log(`Document Title: ${doc.documentTitle}, Match: ${fileTypeMatch}`);
+    
+    const fileType = fileTypeMatch ? `.${fileTypeMatch[1].toLowerCase()}` : "Unknown";
+    const createdAt = new Date(doc._creationTime);
     const formattedCreatedAt = createdAt.toLocaleString();
 
     // Calculate if the document processing is stuck
-    const processingDuration = Date.now() - new Date(doc.createdAt).getTime();
+    const processingDuration = Date.now() - new Date(doc._creationTime).getTime();
     const isStuck = doc.isProcessing && processingDuration > 10 * 60 * 1000; // 10 minutes
 
     return {
@@ -100,7 +102,7 @@ export const FileList: React.FC<FileListProps> = ({ projectId }) => {
               <TableHead className="w-48 text-left font-semibold">Type</TableHead>
               <TableHead className="w-48 text-left font-semibold">Created At</TableHead>
               <TableHead className="w-56 text-left font-semibold">Progress</TableHead>
-              <TableHead className="w-24 text-left font-semibold"></TableHead> {/* New Spinner Column */}
+              <TableHead className="w-24 text-left font-semibold"></TableHead> {/* Spinner Column */}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -130,7 +132,7 @@ export const FileList: React.FC<FileListProps> = ({ projectId }) => {
                     <Skeleton className="h-4 w-[80px]" />
                   </div>
                 </TableCell>
-                {/* New TableCell for Spinner */}
+                {/* New TableCell for Spinner and Check Icon */}
                 <TableCell className="px-1 py-1 text-sm text-left">
                   <div className="flex justify-center">
                     <Skeleton className="h-4 w-4 rounded-full" />
@@ -178,21 +180,19 @@ export const FileList: React.FC<FileListProps> = ({ projectId }) => {
                         Retry
                       </Button>
                     </div>
-                  ) : doc.isProcessing ? (
-                    <>
-                      <Progress value={doc.progress || 0} />
-                    </>
-                  ) : doc.isProcessed ? (
-                    <Progress value={100} />
                   ) : (
-                    <Progress value={100} />
+                    <>
+                      <Progress value={doc.isProcessed ? 100 : doc.progress || 0} />
+                    </>
                   )}
                 </TableCell>
-                {/* New TableCell for Spinner */}
+                {/* Updated TableCell for Spinner and Check Icon */}
                 <TableCell className="px-1 py-3 text-sm text-left">
-                  {doc.isProcessing && (
+                  {doc.isProcessing ? (
                     <Loader2 className="animate-spin h-4 w-4 text-gray-500" aria-label="Loading" />
-                  )}
+                  ) : doc.isProcessed ? (
+                    <Check className="h-4 w-4 text-green-500" aria-label="Completed" />
+                  ) : null}
                 </TableCell>
               </TableRow>
             ))}

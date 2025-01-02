@@ -594,9 +594,7 @@ export async function POST(request: Request) {
       // (Optional) Mark doc as processed
       await convex.mutation('projects:updateProcessingStatus', {
         documentId,
-        isProcessing: false, // done inserting
-        isProcessed: true,    // if you store this at the project level
-        processedAt: new Date().toISOString(),
+        progress: 60,
       });
     } catch (insertError: any) {
       console.error('Error inserting chunks:', insertError);
@@ -702,8 +700,10 @@ export async function POST(request: Request) {
       // Mark final progress as 100
       await convex.mutation('projects:updateProcessingStatus', {
         documentId,
-        isProcessing: false,
         progress: 100,
+        isProcessing: false,
+        isProcessed: true,
+        processedAt: new Date().toISOString(),
       });
 
       // Return final response

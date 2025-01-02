@@ -33,7 +33,7 @@ const SidebarFooter: React.FC = () => {
                     /> 
             </div>
             <p className="ml-5 text-sm text-gray-500">
-                © 2024 Solomon
+                © 2025 Solomon
             </p>
         </div>
     );
