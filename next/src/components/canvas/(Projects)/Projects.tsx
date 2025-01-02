@@ -28,7 +28,7 @@ const Projects: React.FC<{ projectId: string }> = ({ projectId }) => {
   const { activeView, setActiveView, setSelectedFile, selectedFile } = useEditorStore();
 
   // Destructure activateChat from the store
-  const { activateChat } = useChatStore();
+  const { isChatActive, activateChat } = useChatStore();
 
   useEffect(() => {
     if (projectId) {
@@ -105,7 +105,9 @@ const Projects: React.FC<{ projectId: string }> = ({ projectId }) => {
                 Tasks
               </Button> */}
               <Button
-                className="text-gray-600"
+                className={`text-gray-600 ${
+                  isChatActive ? "border-b border-gray-500" : ""
+                }`}
                 variant="outline"
                 onClick={() => activateChat()}
               >
