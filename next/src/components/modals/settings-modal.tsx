@@ -14,6 +14,7 @@ import { ModeToggle } from "@/components/mode-toggle";
 import { InfinityIcon } from "lucide-react";
 import { Button } from "../ui/button";
 import { useEditorStore } from "@/lib/store/editorStore"; // Import Zustand store
+import Userlogin from "./_components/userlogin";
 
 export const SettingsModal = () => {
   const settings = useSettings();
@@ -65,6 +66,20 @@ export const SettingsModal = () => {
                 <InfinityIcon />
               </Button>
             </div>
+
+            {/* User Login Section */}
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-y-1">
+                <Label>Account</Label>
+                <span className="text-[0.8rem] text-muted-foreground">
+                  Manage your account
+                </span>
+              </div>
+
+              {/* Right Side: Reusable Avatar/Dropdown */}
+              <Userlogin />
+            </div>
+
           </div>
         </DialogContent>
       </Dialog>

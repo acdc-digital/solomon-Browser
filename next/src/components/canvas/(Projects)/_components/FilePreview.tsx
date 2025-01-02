@@ -1,14 +1,14 @@
 // /Users/matthewsimon/Documents/Github/solomon-electron/next/src/components/canvas/(Projects)/_components/FilePreview.tsx
 // src/components/FilePreview.tsx
 
-'use client';
+"use client";
 
-import '../../../../setupPDF'; // Keep your PDF worker config here
+import "../../../../setupPDF"; // Keep your PDF worker config here
 import React, { useState, useEffect } from "react";
 import { useEditorStore } from "@/lib/store/editorStore";
 import { useMutation } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
-import { Document, Page, pdfjs } from "react-pdf";
+import { Document, Page } from "react-pdf";
 import {
   ZoomInIcon,
   ZoomOutIcon,
@@ -18,6 +18,7 @@ import {
 } from "lucide-react"; // Example Lucide icons
 import "react-pdf/dist/esm/Page/AnnotationLayer.css";
 import "react-pdf/dist/esm/Page/TextLayer.css";
+import { Button } from "@/components/ui/button";
 
 const FilePreview: React.FC = () => {
   const selectedFile = useEditorStore((state) => state.selectedFile);
@@ -93,7 +94,8 @@ const FilePreview: React.FC = () => {
       <Page
         key={`page_${pageNumber}`}
         pageNumber={pageNumber}
-        width={800 * scale} // Adjust the base width and multiply by scale
+        // The width of the page times your scale factor
+        width={800 * scale} 
         renderAnnotationLayer
         renderTextLayer
       />
@@ -102,21 +104,48 @@ const FilePreview: React.FC = () => {
 
   return (
     <div className="flex flex-col h-[calc(87vh-100px)] overflow-hidden">
-      {/* Top Bar (Back Button) */}
-      <div className="flex flex-row items-center space-x-2 mb-2">
-        <button
+      {/* Toolbar */}
+      <div className="flex flex-row items-center space-x-4 bg-gray-100 p-2 rounded">
+      <Button
+        variant="outline"
           onClick={handleBack}
-          className="px-4 py-2 bg-gray-200 text-gray-800 hover:bg-gray-300"
         >
           &larr; Back to Files
-        </button>
-        <h2 className="text-1xl ml-2">
-          {selectedFile ? selectedFile.documentTitle : "No file selected"}
-        </h2>
-      </div>
+        </Button>
 
-      {/* Toolbar */}
-      <div className="flex flex-row items-center mb-2 space-x-4 bg-gray-100 p-2 rounded">
+        <div className="w-px h-6 bg-gray-300 mx-2" />
+
+        {/* Zoom controls */}
+        <div className="flex flex-row items-center space-x-2">
+          <button
+            onClick={zoomOut}
+            className="bg-gray-200 p-2 hover:bg-gray-300 rounded"
+            aria-label="Zoom Out"
+          >
+            <ZoomOutIcon className="h-4 w-4" />
+          </button>
+          <span className="text-sm">{(scale * 100).toFixed(0)}%</span>
+          <button
+            onClick={zoomIn}
+            className="bg-gray-200 p-2 hover:bg-gray-300 rounded"
+            aria-label="Zoom In"
+          >
+            <ZoomInIcon className="h-4 w-4" />
+          </button>
+
+          {/* <div className="w-px h-6 bg-gray-300 mx-2" />
+
+          <button
+            onClick={resetZoom}
+            className="bg-gray-200 p-2 hover:bg-gray-300 rounded"
+            aria-label="Reset Zoom"
+          >
+            <RotateCwIcon className="h-4 w-4" />
+          </button> */}
+        </div> 
+
+        <div className="w-px h-6 bg-gray-300 mx-2" />
+
         {/* Page navigation */}
         <div className="flex flex-row items-center space-x-2">
           <button
@@ -139,46 +168,32 @@ const FilePreview: React.FC = () => {
             <ChevronRightIcon className="h-4 w-4" />
           </button>
         </div>
-
-        {/* Zoom controls */}
-        <div className="flex flex-row items-center space-x-2">
-          <button
-            onClick={zoomOut}
-            className="bg-gray-200 p-2 hover:bg-gray-300 rounded"
-            aria-label="Zoom Out"
-          >
-            <ZoomOutIcon className="h-4 w-4" />
-          </button>
-          <span className="text-sm">{(scale * 100).toFixed(0)}%</span>
-          <button
-            onClick={zoomIn}
-            className="bg-gray-200 p-2 hover:bg-gray-300 rounded"
-            aria-label="Zoom In"
-          >
-            <ZoomInIcon className="h-4 w-4" />
-          </button>
-          <button
-            onClick={resetZoom}
-            className="bg-gray-200 p-2 hover:bg-gray-300 rounded"
-            aria-label="Reset Zoom"
-          >
-            <RotateCwIcon className="h-4 w-4" />
-          </button>
-        </div>
       </div>
 
       {/* Content Area */}
-      <div className="overflow-auto">
-        {isLoading && <p>Loading PDF...</p>}
-        {error && <p>{error}</p>}
-        {fileUrl && (
-          <Document
-            file={fileUrl}
-            onLoadSuccess={onDocumentLoadSuccess}
-            onLoadError={() => setError("Error loading PDF.")}
+      {/* 
+         1) Make this container flex with justify-center, items-start,
+            and a darker background.
+         2) We place the PDF inside a white box to simulate a "page."
+      */}
+      <div className="flex-1 flex overflow-auto justify-center items-start bg-gray-300 p-4">
+        {isLoading && <p className="text-white">Loading PDF...</p>}
+        {error && <p className="text-red-400">{error}</p>}
+
+        {/* Only render the PDF if we have a fileUrl and not loading/error */}
+        {fileUrl && !error && !isLoading && (
+          <div
+            className="bg-white shadow-md border border-gray-300"
+            style={{ padding: "20px" }}
           >
-            {renderCurrentPage()}
-          </Document>
+            <Document
+              file={fileUrl}
+              onLoadSuccess={onDocumentLoadSuccess}
+              onLoadError={() => setError("Error loading PDF.")}
+            >
+              {renderCurrentPage()}
+            </Document>
+          </div>
         )}
       </div>
     </div>

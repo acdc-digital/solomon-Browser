@@ -22,7 +22,7 @@ export default function ChatLayout() {
                         <button 
                             className='text-gray-500 hover:text-gray-200'
                             onClick={deactivateChat}
-                            aria-label='Close Chat'
+                            aria-label='Closed'
                             >
                             &#x2715; {/* Close Icon */}
                         </button>

@@ -126,14 +126,14 @@ const Projects: React.FC<{ projectId: string }> = ({ projectId }) => {
           )}
           {/* Files */}
           {activeView === "files" && (
-            <div className="ml-3 mr-6 border-b border-l border-r">
+            <div className="ml-3 mr-3 border-b border-l border-r">
               <UploadDocumentButton projectId={projectId} />
               <FileList projectId={projectId} />
             </div>
           )}
           {/* Preview */}
           {activeView === "preview" && selectedFile && (
-            <div className="ml-3 mr-6 border-b border-l border-r">
+            <div className="ml-3 mr-3 border-b border-l border-r">
               <FilePreviewNoSSR />
             </div>
       )}
