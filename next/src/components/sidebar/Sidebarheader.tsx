@@ -1,16 +1,14 @@
 // Sidebarheader.tsx
 // Users/matthewsimon/Documents/GitHub/acdc.solomon-electron/solomon-electron/next/src/components/sidebar/Sidebarheader.tsx
 
-// SidebarHeader.tsx
+'use client';
 
-'use client'
-
-import * as React from "react"
+import * as React from "react";
 import Link from "next/link";
 import Image from "next/image";
 
-import { Moon, Sun } from "lucide-react"
-import { useTheme } from "next-themes"
+import { Moon, Sun } from "lucide-react";
+import { useTheme } from "next-themes";
 
 import { Button } from '@/components/ui/button';
 import {
@@ -18,14 +16,15 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@/components/ui/dropdown-menu";
 
 interface SidebarHeaderProps {
-    title: string; 
+  title: string;
+  isExpanded: boolean; // Added isExpanded prop
 }
 
 const ModeToggle = () => {
-  const { theme, setTheme } = useTheme()
+  const { theme, setTheme } = useTheme();
 
   return (
     <DropdownMenu>
@@ -51,30 +50,36 @@ const ModeToggle = () => {
   );
 };
 
-const SidebarHeader: React.FC<SidebarHeaderProps> = ({ title }) => {
-    return (
-        <div className="px-4 py-3 border-b flex items-center bg-gray-50">
-          {/* <Image
-            className="mr-4"
-            src="/solomon.svg"
-            alt="Next.js Logo"
-            width={25}
-            height={25}
-            priority
-              /> */}
-            <div className='flex'>
-                <Button 
-					className="mr-4"
-					variant={"outline"}>
-                    <Link href="/">Home</Link> 
-                </Button>
+const SidebarHeader: React.FC<SidebarHeaderProps> = ({ title, isExpanded }) => {
+  return (
+    <div className="px-4 py-3 border-b flex items-center bg-gray-50">
+      {/* <Image
+        className="mr-4"
+        src="/solomon.svg"
+        alt="Next.js Logo"
+        width={25}
+        height={25}
+        priority
+      /> */}
+      <div className='flex items-center'>
+        {/* Conditionally render the Home button with smooth transitions */}
+        <Button
+          className={`mr-4 transition-opacity duration-300 ${
+            isExpanded ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+          }`}
+          variant={"outline"}
+        >
+          <Link href="/">Home</Link>
+        </Button>
 
-                {/* <ModeToggle /> */}
-            </div> 
-            <h3 className="text-lg font-semibold ml-3">{title}</h3>
-            {/* You can add more header content here, like buttons or status indicators */}
-        </div>
-    );
+        {/* Optionally include the ModeToggle */}
+        {/* <ModeToggle /> */}
+      </div>
+      {/* Conditionally render the title */}
+      {isExpanded && <h3 className="text-lg font-semibold ml-3">{title}</h3>}
+      {/* You can add more header content here, like buttons or status indicators */}
+    </div>
+  );
 };
 
 export default SidebarHeader;
