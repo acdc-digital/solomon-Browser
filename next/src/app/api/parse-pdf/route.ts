@@ -10,9 +10,8 @@ import { v4 as uuidv4 } from "uuid";
 import pLimit from "p-limit";
 
 import {
-  downloadPdfToTemp,
-  loadPdfPages,
-} from "@/lib/pipe/pdfLoader"; 
+  downloadAndLoadPdf,
+} from "@/lib/pipe/pdfLoader";
 import {
   runOcrOnPage,
   convertPdfPageToImage,
@@ -32,10 +31,11 @@ import {
   getParentProjectId,
   insertChunks,
   updateChunkEmbedding,
-} from "@/lib/pipe/dbOps"; // or whichever named exports you have
-import { retryWithBackoff } from "@/lib/pipe/utils"; // if your backoff is in utils
+} from "@/lib/pipe/dbOps";
+import { retryWithBackoff } from "@/lib/pipe/utils";
 
-export const runtime = "nodejs";
+// removed edge runtime
+// export const runtime = "nodejs";
 
 /**
  * Example POST route for "parse-pdf" that downloads a PDF from Convex,
@@ -62,28 +62,18 @@ export async function POST(request: Request) {
     }
 
     // ----------------------------------
-    // 2) Download PDF Locally
+    // 2) Download PDF & Load with LlamaParse
     // ----------------------------------
-    tempFilePath = await downloadPdfToTemp(fileId);
-
-    // Mark progress ~10
-    await updateProcessingStatus(documentId, {
-      progress: 10,
-      isProcessing: true,
-    });
-
-    // ----------------------------------
-    // 3) Load PDF pages with PDFLoader
-    // ----------------------------------
-    const docs = await loadPdfPages(tempFilePath);
+    console.log("Downloading and parsing PDF with LlamaParse")
+    const docs = await downloadAndLoadPdf(fileId);
     if (!docs.length) {
       throw new Error("No content extracted from the document (empty docs).");
     }
-    console.log(`Loaded ${docs.length} pages.`);
+    console.log("PDF parsing complete")
 
-    // Example of combined text for debugging/logging
-    const extractedText = docs.map((d) => d.pageContent).join("\n");
-    console.log("Sample of extracted text:", extractedText.slice(0, 200), "...");
+      // Example of combined text for debugging/logging
+      const extractedText = docs.map((d) => d.text).join("\n");
+      console.log("Sample of extracted text:", extractedText.slice(0, 200), "...");
 
     // Mark progress ~30
     await updateProcessingStatus(documentId, {
@@ -91,85 +81,81 @@ export async function POST(request: Request) {
     });
 
     // ----------------------------------
-    // 4) Optional OCR Fallback (if needed)
-    // ----------------------------------
-    // This is a simplified example. You might do OCR on pages that are too short or
-    // contain images. We'll skip the actual usage here; just show you how you'd call it:
-    // 
-    // for (let i = 0; i < docs.length; i++) {
-    //   if (docs[i].pageContent.length < 100) {
-    //     console.log(`Page ${i + 1} is too short; attempting OCR fallback.`);
-    //     const ocrText = await runOcrOnPage(tempFilePath, i);
-    //     if (ocrText.trim().length > docs[i].pageContent.length) {
-    //       docs[i].pageContent = ocrText; // Replace the short text with OCR result
-    //     }
-    //   }
-    // }
-
-    // Mark progress ~35
-    // await updateProcessingStatus(documentId, { progress: 35 });
-
-    // ----------------------------------
     // 5) Hierarchical + Semantic Chunking
     // ----------------------------------
     console.log("Splitting the document into sub-chunks...");
-    const totalChars = docs.reduce((acc, doc) => acc + doc.pageContent.length, 0);
+    const totalChars = docs.reduce((acc, doc) => acc + doc.text.length, 0);
     const { chunkSize, chunkOverlap } = getAdaptiveChunkParams(totalChars);
     console.log(
       `Adaptive chunking => chunkSize=${chunkSize}, chunkOverlap=${chunkOverlap}`
     );
 
+
     const allChunks: {
       pageContent: string;
       metadata: {
-        pageNumber?: number;
-        docTitle?: string;
-        docAuthor?: string;
-        headings?: string[];
-        snippet?: string;
-        numTokens?: number;
+          pageNumber?: number;
+          docTitle?: string;
+          docAuthor?: string;
+          headings?: string[];
+          snippet?: string;
+          numTokens?: number;
       };
     }[] = [];
 
-    docs.forEach((doc, pageIndex) => {
-      const pageNumber = doc.metadata?.loc?.pageNumber ?? pageIndex + 1;
-      const docTitle = doc.metadata?.title || "Untitled";
-      const docAuthor = doc.metadata?.author || "Unknown";
+      docs.forEach((doc, pageIndex) => {
+          try{
+            const docContent = JSON.parse(doc.text); // parse JSON string
+              const pageNumber = docContent.metadata?.page_number ?? pageIndex + 1;
+              const docTitle = docContent.metadata?.document_title || "Untitled";
+              const docAuthor = docContent.metadata?.document_author || "Unknown";
+              //console.log("route.ts: docContent.text before hierarchicalSemanticSplit", docContent.text)
+              if (docContent?.pages){
+                for (const page of docContent.pages) {
+                 // console.log("route.ts: page.text before hierarchicalSemanticSplit", page.text)
+                  const pageChunks = page?.text ? hierarchicalSemanticSplit(
+                    page.text,
+                      chunkSize,
+                      chunkOverlap
+                  ) : [];
+                  //console.log("route.ts: pageChunks after hierarchicalSemanticSplit", pageChunks)
+                  
+                  pageChunks.forEach((chunkText) => {
+                     // console.log("route.ts: chunkText before extractHeadingsFromText", chunkText)
+                      const headings = extractHeadingsFromText(chunkText);
+                      const snippetMatch = chunkText.match(/Snippet:\s*(.*)\n/);
+                      const snippet = snippetMatch ? snippetMatch[1].trim() : "";
 
-      const pageChunks = hierarchicalSemanticSplit(
-        doc.pageContent,
-        chunkSize,
-        chunkOverlap
-      );
+                      let tokens: number[] = [];
+                      try {
+                          const encodedTokens = tokenizer.encode(chunkText);
+                          tokens = Array.from(encodedTokens);
+                      } catch (err) {
+                          console.error("Error tokenizing chunk:", err);
+                      }
 
-      pageChunks.forEach((chunkText) => {
-        // Extract snippet from chunk for metadata
-        const headings = extractHeadingsFromText(chunkText);
-        // We might parse snippet from the chunk, but here we do something simple:
-        const snippetMatch = chunkText.match(/Snippet:\s*(.*)\n/);
-        const snippet = snippetMatch ? snippetMatch[1].trim() : "";
-
-        // Tokenize to count tokens
-        let tokens: number[] = [];
-        try {
-          tokens = tokenizer.encode(chunkText);
-        } catch (err) {
-          console.error("Error tokenizing chunk:", err);
-        }
-
-        allChunks.push({
-          pageContent: chunkText,
-          metadata: {
-            pageNumber,
-            docTitle,
-            docAuthor,
-            headings,
-            snippet,
-            numTokens: tokens.length,
-          },
-        });
+                      allChunks.push({
+                          pageContent: chunkText,
+                          metadata: {
+                              pageNumber,
+                              docTitle,
+                              docAuthor,
+                              headings,
+                              snippet,
+                              numTokens: tokens.length,
+                          },
+                      });
+                   });
+                }
+            }
+            else{
+                console.warn("route.ts: no pages property found on docContent", docContent)
+            }
+          }
+          catch (e){
+              console.error("Error parsing document in route.ts", e)
+          }
       });
-    });
 
     console.log("Total number of sub-chunks across all pages:", allChunks.length);
 
@@ -192,15 +178,15 @@ export async function POST(request: Request) {
     // ----------------------------------
     // 7) Insert Chunks (batch insert)
     // ----------------------------------
-    // Prepare chunk docs
-    const docChunks = allChunks.map((chunk, index) => ({
-      pageContent: chunk.pageContent,
-      uniqueChunkId: uuidv4(),
-      chunkNumber: index + 1,
-      metadata: {
-        ...chunk.metadata,
-      },
-    }));
+        // Prepare chunk docs
+        const docChunks = allChunks.map((chunk, index) => ({
+            pageContent: chunk.pageContent,
+            uniqueChunkId: uuidv4(),
+            chunkNumber: index + 1,
+            metadata: {
+                ...chunk.metadata,
+            },
+        }));
 
     // Batching example
     const BATCH_SIZE = 250;
@@ -281,11 +267,5 @@ export async function POST(request: Request) {
       { error: error.message || "Internal Server Error" },
       { status: 500 }
     );
-  } finally {
-    // Cleanup temp file
-    if (tempFilePath && fs.existsSync(tempFilePath)) {
-      fs.unlinkSync(tempFilePath);
-      console.log("Deleted temporary PDF file:", tempFilePath);
-    }
   }
 }

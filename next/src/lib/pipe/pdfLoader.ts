@@ -1,82 +1,101 @@
 // pdfLoader.ts
 // /Users/matthewsimon/Documents/Github/solomon-electron/next/src/lib/pipe/pdfLoader.ts
 
-import fs from "fs";
-import path from "path";
-import fetch from "node-fetch"; // If needed in Node
-import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
-import { NextResponse } from "next/server"; // If you want to use NextResponse for errors
+import fetch from "node-fetch";
+import { LlamaParseReader, Document } from "llamaindex";
+import { NextResponse } from "next/server";
 import convex from "@/lib/convexClient";
-import { retryWithBackoff } from "./utils"; // If you place your backoff code in utils.ts
+import { retryWithBackoff } from "./utils";
 
 /**
- * Download the PDF from a Convex storage URL and save it to a temporary file.
- * 
+ * Download the PDF from a Convex storage URL and convert to a Buffer.
+ *
  * @param fileId The Convex file ID
- * @returns The local path to the saved PDF file
- * 
- * Throws an error if the file cannot be retrieved or saved.
+ * @returns Buffer of PDF Data
+ *
+ * Throws an error if the file cannot be retrieved.
  */
-export async function downloadPdfToTemp(fileId: string): Promise<string> {
-  // 1. Get signed URL from Convex for the given fileId
-  console.log("Invoking Convex mutation: projects:getFileUrl with fileId =", fileId);
-  const response = await retryWithBackoff(
-    () => convex.mutation("projects:getFileUrl", { fileId }),
-    5,    // max retries
-    1000  // initial delay in ms
-  );
+export async function downloadPdfToBuffer(fileId: string): Promise<Buffer> {
+    // 1. Get signed URL from Convex for the given fileId
+    console.log("Invoking Convex mutation: projects:getFileUrl with fileId =", fileId);
+    const response = await retryWithBackoff(
+        () => convex.mutation("projects:getFileUrl", { fileId }),
+        5,
+        1000
+    );
 
-  if (!response || !response.url) {
-    console.error("No URL returned for PDF");
-    throw new Error("No URL returned for PDF");
-  }
+    if (!response || !response.url) {
+        console.error("No URL returned for PDF");
+        throw new Error("No URL returned for PDF");
+    }
 
-  const pdfUrl = response.url;
-  console.log("PDF URL:", pdfUrl);
+    const pdfUrl = response.url;
+    console.log("PDF URL:", pdfUrl);
 
-  // 2. Fetch the PDF bytes
-  console.log("Fetching the PDF from the URL");
-  const pdfResponse = await fetch(pdfUrl, { timeout: 120000 }); // 2-minute timeout
-  if (!pdfResponse.ok) {
-    console.error("Failed to fetch PDF:", pdfResponse.statusText);
-    throw new Error(`Failed to fetch PDF: ${pdfResponse.statusText}`);
-  }
+    // 2. Fetch the PDF bytes
+    console.log("Fetching the PDF from the URL");
+    const pdfResponse = await fetch(pdfUrl, { timeout: 120000 });
+    if (!pdfResponse.ok) {
+        console.error("Failed to fetch PDF:", pdfResponse.statusText);
+        throw new Error(`Failed to fetch PDF: ${pdfResponse.statusText}`);
+    }
 
-  // 3. Write PDF bytes to a temporary file
-  const tempDir = path.join(process.cwd(), "temp");
-  if (!fs.existsSync(tempDir)) {
-    fs.mkdirSync(tempDir);
-  }
+    // 3. Convert to buffer
+    const arrayBuffer = await pdfResponse.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
 
-  const tempFilePath = path.join(tempDir, `${fileId}.pdf`);
-  const arrayBuffer = await pdfResponse.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  fs.writeFileSync(tempFilePath, buffer);
-
-  console.log("PDF saved to:", tempFilePath);
-  return tempFilePath;
+    return buffer;
 }
 
 /**
- * Load the saved PDF file into `docs` using `PDFLoader`.
- * Each page is returned as a separate "document" object from langchain.
- * 
- * @param tempFilePath Path to the saved PDF
- * @returns An array of documents (each page is a doc)
+ * Loads the PDF data directly from the Buffer using LlamaParseReader.
+ *
+ * @param pdfBuffer Buffer of the PDF data
+ * @returns An array of Document objects from LlamaIndex
  */
-export async function loadPdfPages(tempFilePath: string) {
-  // You can pass options to PDFLoader, e.g. { splitPages: true }
-  const loader = new PDFLoader(tempFilePath, {
-    splitPages: true, // Each page is a separate document
-  });
+export async function loadPdfWithLlamaParseReader(pdfBuffer: Buffer): Promise<Document[]> {
+    try {
+        const apiKey = process.env.LLAMA_CLOUD_API_KEY; // Access env variable
+        const reader = new LlamaParseReader({
+            apiKey,
+            resultType: "json",
+           verbose: false
+        });
+      
+        // Convert buffer to Uint8Array for loadJson
+        const uint8Array = new Uint8Array(pdfBuffer);
+        const jsonResult = await reader.loadJson(uint8Array);
 
-  const docs = await loader.load();
-  if (!docs || docs.length === 0) {
-    throw new Error("No content extracted from the document.");
-  }
+        const documents = jsonResult.map(result => {
+            return new Document({
+                text: JSON.stringify(result),
+                metadata: {}
+            });
+        })
+        console.log("PDF parsing completed");
+        return documents;
 
-  console.log("Total pages (docs) loaded:", docs.length);
-  console.log("Sample metadata from first page:", docs[0].metadata);
+    }
+    catch (error) {
+        console.error("Error during LlamaParse processing:", error);
+        throw new Error(`Error during LlamaParse processing: ${error}`);
+    }
+}
 
-  return docs;
+
+/**
+ * High-level function to download and load the PDF with LlamaParse
+ *
+ * @param fileId The Convex file ID
+ * @returns An array of Document objects
+ */
+export async function downloadAndLoadPdf(fileId: string): Promise<Document[]> {
+    try {
+        const pdfBuffer = await downloadPdfToBuffer(fileId);
+        const documents = await loadPdfWithLlamaParseReader(pdfBuffer);
+        return documents;
+    } catch (error) {
+        console.error("Error in downloadAndLoadPdf:", error);
+        throw error;
+    }
 }
