@@ -1,13 +1,16 @@
-import type { Config } from "tailwindcss"
+// Tailwind Config
+// /Users/matthewsimon/Documents/Github/solomon-electron/next/tailwind.config.ts
 
-const config = {
+import type { Config } from "tailwindcss";
+
+const config: Config = {
   darkMode: ["class"],
   content: [
-    './pages/**/*.{ts,tsx}',
-    './components/**/*.{ts,tsx}',
-    './app/**/*.{ts,tsx}',
-    './src/**/*.{ts,tsx}',
-	],
+    "./pages/**/*.{ts,tsx}",
+    "./components/**/*.{ts,tsx}",
+    "./app/**/*.{ts,tsx}",
+    "./src/**/*.{ts,tsx}",
+  ],
   prefix: "",
   theme: {
     container: {
@@ -72,12 +75,21 @@ const config = {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
       },
+      width: {
+        // Add custom width
+        "59": "13.5rem", // w-54 => 13.5rem (216px)
+        "16": "4rem",     // w-16 => 4rem (64px), already exists but included for clarity
+      },
+      minWidth: {
+        "59": "13.5rem", // min-w-54 => 13.5rem
+        "16": "4rem",     // min-w-16 => 4rem
+      },
     },
   },
   plugins: [
     require("tailwindcss-animate"),
-    require('@tailwindcss/typography')
+    require("@tailwindcss/typography"),
   ],
-} satisfies Config
+};
 
-export default config
+export default config;

@@ -1,3 +1,4 @@
+// Sidebar
 // /Users/matthewsimon/Documents/GitHub/acdc.solomon-electron/solomon-electron/next/src/app/dashboard/_components/Sidebar.tsx
 
 'use client';
@@ -9,28 +10,15 @@ import { useMutation } from 'convex/react';
 import {
   ArrowLeftFromLine,
   ArrowRightFromLine,
-  ChevronsLeftRight,
-  Plus,
   PlusCircle,
-  PlusSquare,
-  RefreshCcw,
   Search,
-  SquarePlusIcon,
-  Trash,
-  Trash2Icon,
 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api } from '../../../../convex/_generated/api';
 import { toast } from 'sonner';
 import { ProjectItem } from '@/components/sidebar/ProjectItem';
 import { ProjectList } from '@/components/sidebar/Project-List';
 import { Separator } from '@/components/ui/separator';
-import {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-} from '@/components/ui/popover';
-import { Trashbox } from '@/components/sidebar/Trashbox';
 import { useSearch } from '@/hooks/use-search';
 import { useEditorStore } from '@/lib/store/editorStore';
 
@@ -45,16 +33,28 @@ const Sidebar: React.FC<SidebarProps> = ({ onProjectSelect }) => {
   // State to toggle the sidebar width
   const [isExpanded, setIsExpanded] = useState(true);
 
+  // Persist sidebar state in localStorage
+  useEffect(() => {
+    const storedState = localStorage.getItem('sidebarExpanded');
+    if (storedState !== null) {
+      setIsExpanded(JSON.parse(storedState));
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('sidebarExpanded', JSON.stringify(isExpanded));
+  }, [isExpanded]);
+
   // Function to toggle the state
   const toggleSidebar = () => {
     console.log('Toggling sidebar');
-    setIsExpanded(!isExpanded);
+    setIsExpanded((prev) => !prev);
   };
 
   const create = useMutation(api.projects.create);
 
   const handleCreate = () => {
-    const promise = create({ title: ' New Project' });
+    const promise = create({ title: 'New Project' });
 
     toast.promise(promise, {
       loading: 'Creating a new Project...',
@@ -75,17 +75,19 @@ const Sidebar: React.FC<SidebarProps> = ({ onProjectSelect }) => {
   return (
     <div
       className={`flex flex-col ${
-        isExpanded ? 'w-64' : 'w-24'
-      } h-screen border-r transition-width duration-300`}
-      style={{ minWidth: isExpanded ? '14.5rem' : '6rem' }} // Ensure fixed min-width
+        isExpanded ? 'w-60' : 'w-16' 
+      } h-screen border-r transition-[width] duration-300 ease-in-out overflow-hidden flex-shrink-0`}
     >
-      <SidebarHeader title="" />
+      {/* Sidebar Header */}
+      <SidebarHeader title="" isExpanded={isExpanded} />
+
+      {/* Toggle Button */}
       <Button
         variant="link"
-        className={`flex justify-end items-center w-full ${
-          isExpanded ? '' : 'pr-14'
-        }`}
+        className="flex justify-end items-center w-full"
         onClick={toggleSidebar}
+        aria-expanded={isExpanded}
+        aria-label={isExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
       >
         {isExpanded ? (
           <ArrowLeftFromLine className="w-4 h-4" />
@@ -94,36 +96,47 @@ const Sidebar: React.FC<SidebarProps> = ({ onProjectSelect }) => {
         )}
       </Button>
 
-      {/* Search & New Project Buttons */}
-      <div className="mb-1 ml-1">
-        <ProjectItem
-          onClick={search.onOpen}
-          label="Search"
-          icon={Search}
-          isSearch
-        />
-      </div>
-
-      <div className="mb-1 ml-1">
-        <ProjectItem onClick={handleCreate} label="New Project" icon={PlusCircle} />
-
-        {/* <ProjectItem
-          href="/dashboard"
-          label="Collapse All"
-          icon={RefreshCcw}
-        /> */}
-        <div>
-          <Separator className="mt-3 mb-2" />
+      {/* Inner Content */}
+      <div
+        className={`flex flex-col flex-grow transition-opacity duration-300 ease-in-out ${
+          isExpanded ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+      >
+        {/* Search & New Project Buttons */}
+        <div className="mb-2 ml-2">
+          <ProjectItem
+            onClick={search.onOpen}
+            label="Search"
+            icon={Search}
+            isSearch
+          />
         </div>
-      </div>
 
-      {/* Sidebar content goes here */}
-      <div className="flex flex-grow flex-col overflow-y-auto">
-        <ProjectList onProjectSelect={handleProjectSelect} />
-      </div>
+        <div className="mb-2 ml-2">
+          <ProjectItem
+            onClick={handleCreate}
+            label="New Project"
+            icon={PlusCircle}
+          />
 
-      {/* Sidebar Footer */}
-      <SidebarFooter />
+          {/* <ProjectItem
+            href="/dashboard"
+            label="Collapse All"
+            icon={RefreshCcw}
+          /> */}
+          <div>
+            <Separator className="mt-4 mb-2" />
+          </div>
+        </div>
+
+        {/* Project List */}
+        <div className="flex flex-grow flex-col overflow-y-auto">
+          <ProjectList onProjectSelect={handleProjectSelect} />
+        </div>
+
+        {/* Sidebar Footer */}
+        <SidebarFooter isExpanded={isExpanded} />
+      </div>
     </div>
   );
 };
