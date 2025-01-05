@@ -63,6 +63,7 @@
     "framer-motion": "^11.0.20",
     "html-to-text": "^9.0.5",
     "langchain": "^0.3.6",
+    "llamaindex": "^0.8.30",
     "lucide-react": "^0.360.0",
     "ml-kmeans": "^6.0.0",
     "next": "14.1.4",
