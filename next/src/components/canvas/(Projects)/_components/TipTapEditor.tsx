@@ -93,7 +93,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
     ],
     content: initialContent,
     onUpdate: ({ editor }) => {
-      const content = editor.getText();
+      const content = editor.getHTML();
       onChange(content);
     },
   });

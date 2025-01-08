@@ -66,6 +66,10 @@ export async function insertChunks(
       headings?: string[];
       numTokens?: number;
       snippet?: string;
+      // New fields:
+      keywords?: string[];
+      entities?: string[];
+      topics?: string[];
     };
   }[]
 ) {

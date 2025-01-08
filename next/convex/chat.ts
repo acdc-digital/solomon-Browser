@@ -1,4 +1,4 @@
-// Chat.ts
+// chat.ts
 // /Users/matthewsimon/Documents/Github/solomon-electron/next/convex/chat.ts
 
 import { v } from "convex/values";
@@ -86,7 +86,6 @@ async function combinedSearchChunks(
   const uniqueResults = deduplicateChunksById(combined);
 
   // 4) Optional: Re-rank or slice if you want to limit to topK overall
-  // For simplicity, we just slice:
   return uniqueResults.slice(0, topK);
 }
 
@@ -154,7 +153,6 @@ export const getAllEntries = query({
 // Action to handle user messages
 // Enhanced Action with Summaries + Metadata + Combined Search
 // -----------------------------
-// chat.ts
 export const handleUserAction = action({
   args: {
     message: v.string(),
@@ -167,30 +165,28 @@ export const handleUserAction = action({
         documentId: projectId,
       });
 
-      // (Optional) Summarize or trim docContent if it's very large:
-      // const docContentShort = docContent.length > 1000
-      //   ? await summarizeChunk(docContent)
-      //   : docContent;
-
       // Step 1: Retrieve chunks from both embeddings + text search
       const results: SerializedChunk[] = await ctx.runAction(api.search.combinedSearchChunks, {
         query: message,
         projectId,
-        topK: 10,
+        topK: 20,
       });
 
       console.log("Combined (embedding + text) Results:", results);
 
       // Step 2: Summarize and combine chunk content + metadata
+      // We'll highlight pageNumber, keywords, and entities
       const contextPromises = results.map(async (chunk) => {
-        const { pageNumber, docTitle, docAuthor, headings } = chunk.metadata || {};
+        const { pageNumber, keywords, entities } = chunk.metadata || {};
+        // Summarize the pageContent if it's long
         const possiblySummarized = await summarizeChunk(chunk.pageContent);
 
         return `
         [Chunk ID: ${chunk._id}]
-        Page ${pageNumber || "?"} | Title: ${docTitle || "Untitled"} | Author: ${docAuthor || "Unknown"}
-        Headings: ${headings?.join(", ") || "None"}
-        ---
+        Page ${pageNumber || "?"}
+        Keywords: ${keywords?.length ? keywords.join(", ") : "None"}
+        Entities: ${entities?.length ? entities.join(", ") : "None"}
+
         ${possiblySummarized}
         `.trim();
       });
@@ -198,22 +194,27 @@ export const handleUserAction = action({
       const contextArray = await Promise.all(contextPromises);
       const chunkContextText = contextArray.join("\n\n");
 
-      // Step 3: Construct the prompt for OpenAI with BOTH:
-      //   1. The single-document content from getDocumentContent
-      //   2. The chunk-based context
+      // Step 3: Construct the system prompt for OpenAI
+      // We explicitly mention page number and metadata usage
       const systemPrompt = `
       You are a helpful assistant. The user asked: "${message}"
 
-      Here is additional context provided by the User:
+      Here is additional context from the user:
       ${docContent}
 
-      Below is chunk-based context from relevant documents (with headings/metadata):
+      Below is chunk-based context from relevant documents:
+      Each chunk includes: [Chunk ID], page number, keywords, and entities.
+      Use the page number as a reference whenever citing specific text from that chunk.
+      The user may want to see references to the chunk or page # in your final answer.
+
       ${chunkContextText}
 
       Instructions:
       1) Provide an answer based on the context if relevant.
       2) If the context is insufficient, indicate that you lack enough info.
       3) Cite relevant chunk IDs or page numbers if referencing specific text.
+      4) Mention keywords or entities if they help clarify context,
+         but focus on the user’s question.
       `.trim();
 
       console.log("System Prompt for OpenAI:", systemPrompt);
