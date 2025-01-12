@@ -66,5 +66,27 @@ export default defineSchema({
     input: v.string(),
     response: v.string(),
     projectId: v.optional(v.id("projects")),
-  }).index("by_project", ["projectId"]),
+    isGraphChat: v.optional(v.boolean()),
+  })
+  .index("by_project", ["projectId"]),
+
+  // New Schema for Graph Elements (Nodes and Links in a single collection)
+  graph: defineTable({
+    // A discriminator to indicate whether this entry is a node or a link.
+    elementType: v.string(), // Expected values: "node" or "link"
+
+    // Fields for nodes:
+    documentChunkId: v.optional(v.string()),
+    label: v.optional(v.string()),
+    group: v.optional(v.string()),
+    significance: v.optional(v.number()),
+
+    // Fields for links:
+    source: v.optional(v.string()),
+    target: v.optional(v.string()),
+    similarity: v.optional(v.number()),
+    relationship: v.optional(v.string()),
+  })
+  .searchIndex("search_label", { searchField: "label" })
+  .searchIndex("search_group", { searchField: "group" })
 });

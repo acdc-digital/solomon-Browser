@@ -39,7 +39,7 @@ export interface DocChunk {
 export async function generateEmbeddingsForChunks(
   docChunks: DocChunk[],
   openAIApiKey: string,
-  modelName: string = "text-embedding-3-small",  // or "text-embedding-ada-002"
+  modelName: string = "text-embedding-3-small",
   retries: number = 5,
   initialDelay: number = 1000
 ): Promise<number[][]> {

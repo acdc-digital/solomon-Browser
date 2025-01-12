@@ -1,5 +1,6 @@
 // src/lib/pipe/chunking.ts
 // /Users/matthewsimon/Documents/Github/solomon-electron/next/src/lib/pipe/chunking.ts
+// -------------------------------------------------------------------------------------
 
 import { isHeading, splitTextByRegex } from "./utils";
 // Import your existing metadata extraction helpers:
@@ -25,7 +26,7 @@ export interface Chunk {
 }
 
 /**
- * Splits the provided text by any found headings. Returns an array of
+ * Splits the provided text by any found markdown headings. Returns an array of
  * strings, where each is either a heading line or the content below it.
  */
 export function splitByHeadings(text: string): string[] {
@@ -44,70 +45,56 @@ export function splitByHeadings(text: string): string[] {
 }
 
 /**
- * Performs hierarchical semantic chunking, splitting the input text into
- * smaller chunks that maintain a semantic relationship with their surrounding
- * content. Then, for each chunk, we extract keywords, entities, and topics.
- *
- * @param text         The string of text to chunk
- * @param chunkSize    The max size of chunks in characters
- * @param chunkOverlap How many chars to overlap per chunk (not fully shown here)
- * @returns            An array of `Chunk` objects with pageContent + metadata
+ * Merges small parts to avoid creating many tiny chunks post-split. You can
+ * adjust the `minSize` threshold as needed. If a part is smaller than `minSize`,
+ * it is merged with the adjacent part.
  */
-export function hierarchicalSemanticSplit(
+function mergeSmallParts(parts: string[], minSize: number): string[] {
+  const merged: string[] = [];
+  let buffer = "";
+
+  for (const part of parts) {
+    if (!buffer) {
+      buffer = part;
+    } else if ((buffer + part).length < minSize) {
+      // Merge with previous buffer
+      buffer += "\n" + part;
+    } else {
+      // Push the current buffer if it meets threshold
+      merged.push(buffer);
+      buffer = part;
+    }
+  }
+
+  // Push any remaining content
+  if (buffer) {
+    merged.push(buffer);
+  }
+
+  return merged;
+}
+
+/**
+ * Splits text into chunks of size `chunkSize`, each overlapping by `chunkOverlap`.
+ * Overlap preserves context that might be cut at the boundary.
+ */
+function chunkBySizeWithOverlap(
   text: string,
   chunkSize: number,
   chunkOverlap: number
-): Chunk[] {
-  if (!text) {
-    console.warn("hierarchicalSemanticSplit: No text provided");
-    return [];
+): string[] {
+  const chunks: string[] = [];
+  let start = 0;
+
+  while (start < text.length) {
+    const end = Math.min(start + chunkSize, text.length);
+    const segment = text.slice(start, end);
+    chunks.push(segment);
+
+    // Move start by (chunkSize - overlap) to create overlap
+    start += (chunkSize - chunkOverlap);
   }
-
-  try {
-    // Step 1: Split into heading-based sections
-    const parts = splitByHeadings(text); // e.g. [ "## Heading...", "Some text...", "## Next Heading...", "More text..." ]
-    const chunks: Chunk[] = [];
-
-    // Step 2: For each heading or content block returned by splitByHeadings
-    for (const part of parts) {
-      if (isHeading(part.trim())) {
-        // This entire `part` is a heading-like line; treat as a single chunk
-        chunks.push(createChunk(part, true));
-      } else {
-        // This is regular text; we now further split it into sub-chunks
-        const sentenceRegex = /(?<=[.?!])\s+/; // Roughly split by end of sentence
-        const subChunks = splitTextByRegex(part, sentenceRegex);
-
-        for (const subChunk of subChunks) {
-          if (subChunk.length < chunkSize) {
-            chunks.push(createChunk(subChunk, false));
-          } else {
-            // If a subChunk is larger than chunkSize, split further by whitespace
-            const wordRegex = /\s+/;
-            const evenSmallerChunks = splitTextByRegex(subChunk, wordRegex);
-            let currentChunk = "";
-            for (const token of evenSmallerChunks) {
-              // +1 for a space or token boundary
-              if ((currentChunk + token).length < chunkSize) {
-                currentChunk += token + " ";
-              } else {
-                chunks.push(createChunk(currentChunk, false));
-                currentChunk = token + " ";
-              }
-            }
-            if (currentChunk) {
-              chunks.push(createChunk(currentChunk, false));
-            }
-          }
-        }
-      }
-    }
-
-    return chunks;
-  } catch (e) {
-    console.error("Error in hierarchicalSemanticSplit", e);
-    return [];
-  }
+  return chunks;
 }
 
 /**
@@ -119,19 +106,82 @@ function createChunk(text: string, isHeadingChunk: boolean): Chunk {
   const entities = extractEntities(text);
   const topics = assignTopics(text);
 
-  // If you also want to detect headings inside the chunk text:
-  // const headings = extractHeadingsFromText(text);
-
   return {
     pageContent: text,
     metadata: {
       isHeading: isHeadingChunk,
-      // headings, // Uncomment if you want to store any headings found
+      // headings, // Optionally store sub-headings if you wish (see extractHeadingsFromText)
       keywords,
       entities,
       topics,
     },
   };
+}
+
+/**
+ * Performs a more flexible, adaptive chunking strategy:
+ * 1. Split by headings (if any).
+ * 2. Merge very small heading sections so they don't become isolated tiny chunks.
+ * 3. For each merged section, chunk it by size & overlap.
+ * 4. (Optional) If a chunk is extremely large, split by sentence or tokens as a fallback.
+ * 5. Extract metadata for each chunk.
+ *
+ * @param text         The text to chunk
+ * @param chunkSize    Target size of chunks in characters (e.g., ~2000–3000)
+ * @param chunkOverlap Overlap in characters (e.g., 200–300)
+ */
+export function hierarchicalSemanticSplit(
+  text: string,
+  chunkSize: number,
+  chunkOverlap: number
+): Chunk[] {
+  if (!text) {
+    console.warn("hierarchicalSemanticSplit: No text provided");
+    return [];
+  }
+
+  const chunks: Chunk[] = [];
+  try {
+    // 1) Split by headings
+    const rawParts = splitByHeadings(text);
+
+    // 2) Merge small sections (tweak 500 or any threshold you like)
+    const mergedParts = mergeSmallParts(rawParts, 500);
+
+    // 3) Chunk each merged section by size with overlap
+    for (const part of mergedParts) {
+      const trimmedPart = part.trim();
+
+      // Decide if this entire part is a heading-like line
+      // (Only do this if part is extremely short,
+      //  or if you want headings as separate single-line chunks.)
+      if (isHeading(trimmedPart)) {
+        // If the heading line is all alone, chunk it separately
+        chunks.push(createChunk(trimmedPart, true));
+        continue;
+      }
+
+      // If the part is smaller than chunkSize, just create one chunk
+      if (trimmedPart.length <= chunkSize) {
+        chunks.push(createChunk(trimmedPart, false));
+      } else {
+        // 4) Optionally skip direct sentence-splitting for large text.
+        //    Instead, chunk by size & overlap first:
+        const largeChunks = chunkBySizeWithOverlap(trimmedPart, chunkSize, chunkOverlap);
+
+        // (Optional) If you really want to ensure no single chunk is "too big" for
+        // your LLM, you could do a further pass on each 'largeChunk' if it remains
+        // extremely large (e.g., 10k+ chars). For now, we assume chunkSize is reasonable.
+        for (const lc of largeChunks) {
+          chunks.push(createChunk(lc, false));
+        }
+      }
+    }
+  } catch (e) {
+    console.error("Error in hierarchicalSemanticSplit", e);
+  }
+
+  return chunks;
 }
 
 /**
@@ -153,20 +203,25 @@ export function extractHeadingsFromText(text: string): string[] {
 
 /**
  * Calculates adaptive chunking parameters based on the provided total characters
- * and some heuristic rules. This function helps ensure that chunk sizes and overlaps
- * adapt appropriately to the total size of the input text, so it's not a fixed chunk size.
+ * and some heuristic rules. Adjust the returned chunkSize and chunkOverlap
+ * to suit your LLM context window. If you have a very large LLM context window
+ * (e.g., 128,000 tokens), you can safely use bigger chunks (3000–6000 chars or more).
  */
 export function getAdaptiveChunkParams(totalChars: number): {
   chunkSize: number;
   chunkOverlap: number;
 } {
+  // Example baseline:
   if (totalChars < 1000) {
-    return { chunkSize: 512, chunkOverlap: 50 };
+    return { chunkSize: 700, chunkOverlap: 100 };
   } else if (totalChars < 5000) {
-    return { chunkSize: 1024, chunkOverlap: 100 };
-  } else if (totalChars < 10000) {
     return { chunkSize: 1500, chunkOverlap: 200 };
+  } else if (totalChars < 10000) {
+    return { chunkSize: 2500, chunkOverlap: 300 };
+  } else if (totalChars < 50000) {
+    return { chunkSize: 3000, chunkOverlap: 300 };
   } else {
-    return { chunkSize: 2048, chunkOverlap: 250 };
+    // For very large docs and large LLM context, you can push this even higher
+    return { chunkSize: 4000, chunkOverlap: 400 };
   }
 }

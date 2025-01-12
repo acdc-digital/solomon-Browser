@@ -1,28 +1,29 @@
-// components/EmbeddingGraph.tsx
-// /Users/matthewsimon/Documents/Github/solomon-electron/next/src/components/canvas/(Admin)/_components/EmbeddingGraph.tsx
+// Graph-UI
+// /Users/matthewsimon/Documents/Github/solomon-desktop/solomon-Desktop/next/src/components/canvas/(Admin)/_components/EmbeddingGraph.tsx
+
+// /Users/matthewsimon/Documents/GitHub/solomon-desktop/solomon-Desktop/next/src/components/canvas/(Admin)/_components/EmbeddingGraph.tsx
 
 import React, { useEffect, useState, useRef } from "react";
 import dynamic from "next/dynamic";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
 import { cosineSimilarity } from "@/lib/similarity";
 import { GraphData, GraphLink, GraphNode } from "@/types/graph";
 import { Button } from "@/components/ui/button";
 import { CircleMinus, CirclePlus, RefreshCcw } from "lucide-react";
+import pLimit from "p-limit";
+import { refineNodeLabel, refineEdgeRelationship } from "./nodeRefiner";
 
-// We load react-force-graph-2d dynamically for SSR reasons
-const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), { ssr: false });
+// 1) Import ForceGraph2D dynamically.
+const ForceGraph2D = dynamic<any>(() => import("react-force-graph-2d"), {
+  ssr: false,
+});
 
-/**
- * Represents each chunk returned by getAllEmbeddings.
- * We assume it has keywords + topics in metadata. Adjust as needed.
- */
 interface EmbeddingChunk {
   id: string;
   pageContent: string;
   embedding: number[];
   metadata?: {
-    // Possibly more fields exist
     keywords?: string[];
     topics?: string[];
     module?: string | null;
@@ -37,18 +38,18 @@ const EmbeddingGraph: React.FC = () => {
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
   const [linkStrength, setLinkStrength] = useState(1);
   const [cursorHistory, setCursorHistory] = useState<(string | null)[]>([null]);
-
-  const topK = 5; // how many neighbors each node connects to
+  const topK = 5;
   const graphRef = useRef<any>();
 
-  // Fetch chunk embeddings with current limit + cursor
+  // Convex mutations for batch updating graph data
+  const batchUpsertGraphNodes = useMutation(api.graph.batchUpsertGraphNodes);
+  const batchUpsertGraphLinks = useMutation(api.graph.batchUpsertGraphLinks);
+
+  // 2) Fetch chunk embeddings
   const data = useQuery(api.chunks.getAllEmbeddings, { limit, cursor });
   const isLoading = data === undefined;
 
-  /**
-   * 1. On mount, try to load from sessionStorage
-   *    so we keep state between page reloads or navigations.
-   */
+  // 3) On mount, load from sessionStorage if present
   useEffect(() => {
     const savedEmbeddings = sessionStorage.getItem("allEmbeddings");
     const savedGraphData = sessionStorage.getItem("graphData");
@@ -57,95 +58,111 @@ const EmbeddingGraph: React.FC = () => {
     if (savedEmbeddings && savedGraphData) {
       setAllEmbeddings(JSON.parse(savedEmbeddings));
       setGraphData(JSON.parse(savedGraphData));
-
       if (savedCamera && graphRef.current) {
         const cameraState = JSON.parse(savedCamera);
+        // Restore camera position from saved state.
         graphRef.current.camera(cameraState);
       }
     }
   }, []);
 
-  // 2. Log newly fetched data for debugging
+  // 4) Debug-log the newly fetched data
   useEffect(() => {
     console.log("Fetched Data:", data);
   }, [data]);
 
-  /**
-   * 3. If we have no embeddings loaded from sessionStorage,
-   *    and we just fetched a new batch, push them to `allEmbeddings`.
-   */
+  // 5) If we have no embeddings from sessionStorage and we got new data
   useEffect(() => {
     if (allEmbeddings.length === 0 && data?.chunks && data.chunks.length > 0) {
       console.log("Fetched Chunks:", data.chunks);
       setAllEmbeddings((prev) => [...prev, ...data.chunks]);
       setCursor(data.nextCursor);
       setCursorHistory((prev) => [...prev, data.nextCursor]);
-    } else if (allEmbeddings.length === 0) {
-      console.log("No chunks fetched in this batch.");
     }
   }, [data, allEmbeddings.length]);
 
-  /**
-   * 4. Compute the graph data whenever `allEmbeddings` changes
-   */
+  // 6) Build (or rebuild) the graph whenever `allEmbeddings` changes
   useEffect(() => {
     if (allEmbeddings.length === 0) return;
 
-    // Create nodes, label each node by keywords, color by "dominant topic"
-    const nodes: GraphNode[] = allEmbeddings.map((chunk) => {
-      // 1. Build a label from keywords
-      let labelStr = "No keywords available";
-      const kw = chunk.metadata?.keywords;
-      if (kw && kw.length > 0) {
-        labelStr = kw.join(", ");
-      }
+    async function buildGraph() {
+      const limitLLM = pLimit(5); // concurrency limit for LLM calls
 
-      // 2. Decide group color by "dominant topic"
-      // e.g., if topics exist, we pick the first, else 'No topic'
-      let groupTopic = "No topic";
-      const tp = chunk.metadata?.topics;
-      if (tp && tp.length > 0) {
-        groupTopic = tp[0];
-      }
+      // 6a) Build nodes using LLM for labels.
+      const nodePromises = allEmbeddings.map((chunk) =>
+        limitLLM(async () => {
+          const kw = chunk.metadata?.keywords || [];
+          const tp = chunk.metadata?.topics || [];
+          const fallbackLabel = chunk.id.slice(0, 8);
+          const { label, group } = await refineNodeLabel(kw, tp, fallbackLabel);
+          return {
+            id: chunk.id, // local identification for our graph (not necessarily the DB id)
+            label,
+            group,
+          } as GraphNode;
+        })
+      );
+      const nodes: GraphNode[] = await Promise.all(nodePromises);
 
-      return {
-        id: chunk.id,
-        label: labelStr,
-        group: groupTopic, // used by nodeAutoColorBy
-      };
-    });
-
-    // Build similarity-based links
-    const links: GraphLink[] = [];
-    allEmbeddings.forEach((chunkA, indexA) => {
-      // Calculate sim to all others
-      const similarities = allEmbeddings.map((chunkB, indexB) => {
-        if (indexA === indexB) return { id: chunkB.id, similarity: -1 };
-        const sim = cosineSimilarity(chunkA.embedding, chunkB.embedding);
-        return { id: chunkB.id, similarity: sim };
-      });
-
-      // Sort by similarity descending, take top K
-      const topSimilar = similarities
-        .filter((sim) => sim.similarity > 0)
-        .sort((a, b) => b.similarity - a.similarity)
-        .slice(0, topK);
-
-      topSimilar.forEach((sim) => {
-        links.push({
-          source: chunkA.id,
-          target: sim.id,
-          similarity: sim.similarity,
+      // 6b) Build edges based on cosine similarity.
+      const linkPromises: Promise<GraphLink>[] = [];
+      allEmbeddings.forEach((chunkA, indexA) => {
+        const similarities = allEmbeddings.map((chunkB, indexB) => {
+          if (indexA === indexB) return { id: chunkB.id, similarity: -1 };
+          const sim = cosineSimilarity(chunkA.embedding, chunkB.embedding);
+          return { id: chunkB.id, similarity: sim };
+        });
+        const topSimilar = similarities
+          .filter((sim) => sim.similarity > 0)
+          .sort((a, b) => b.similarity - a.similarity)
+          .slice(0, topK);
+        topSimilar.forEach((sim) => {
+          const chunkB = allEmbeddings.find((c) => c.id === sim.id);
+          if (!chunkB) return;
+          const linkP = limitLLM(async () => {
+            const snippetA = chunkA.pageContent.slice(0, 300);
+            const snippetB = chunkB.pageContent.slice(0, 300);
+            const relationship = await refineEdgeRelationship(snippetA, snippetB);
+            return {
+              source: chunkA.id,
+              target: chunkB.id,
+              similarity: sim.similarity,
+              relationship,
+            } as GraphLink;
+          });
+          linkPromises.push(linkP);
         });
       });
-    });
+      const links = await Promise.all(linkPromises);
+      console.log("Generated Links with Relationships:", links);
 
-    setGraphData({ nodes, links });
-  }, [allEmbeddings]);
+      // Update local state with the new graph data.
+      setGraphData({ nodes, links });
 
-  /**
-   * 5. Persist the updated embeddings/graph to sessionStorage
-   */
+      // 6c) Batch update the database with the new graph nodes and links.
+      try {
+        const nodesForBatch = nodes.map((node) => ({
+          documentChunkId: node.id, // Using node id as documentChunkId.
+          label: node.label,
+          group: node.group,
+          significance: 0, // Or compute significance as needed.
+        }));
+        const linksForBatch = links.map((link) => ({
+          source: link.source,
+          target: link.target,
+          similarity: link.similarity,
+          relationship: link.relationship,
+        }));
+        await batchUpsertGraphNodes({ nodes: nodesForBatch });
+        await batchUpsertGraphLinks({ links: linksForBatch });
+      } catch (error) {
+        console.error("Error with batched graph updates:", error);
+      }
+    }
+    buildGraph();
+  }, [allEmbeddings, batchUpsertGraphNodes, batchUpsertGraphLinks]);
+
+  // 7) Persist data to sessionStorage
   useEffect(() => {
     if (allEmbeddings.length > 0) {
       sessionStorage.setItem("allEmbeddings", JSON.stringify(allEmbeddings));
@@ -153,9 +170,7 @@ const EmbeddingGraph: React.FC = () => {
     }
   }, [allEmbeddings, graphData]);
 
-  /**
-   * 6. Save camera state to sessionStorage when the engine stops
-   */
+  // 8) Save camera state on engine stop
   const handleEngineStop = () => {
     if (graphRef.current) {
       const camera = graphRef.current.camera();
@@ -163,7 +178,7 @@ const EmbeddingGraph: React.FC = () => {
     }
   };
 
-  // Optionally, save camera state before unload as well
+  // Save camera state before leaving the page.
   useEffect(() => {
     const handleBeforeUnload = () => {
       handleEngineStop();
@@ -174,16 +189,14 @@ const EmbeddingGraph: React.FC = () => {
     };
   }, []);
 
-  /**
-   * 7. Provide "loadMore" and "loadLess" for pagination or chunk-based expansions
-   */
+  // 9) Pagination controls
   const loadMore = () => {
     const latestCursor = cursorHistory[cursorHistory.length - 1];
     if (latestCursor) {
       setLimit((prev) => prev + 100);
     }
   };
-  
+
   const loadLess = () => {
     if (cursorHistory.length > 1) {
       setCursorHistory((prev) => prev.slice(0, prev.length - 1));
@@ -193,47 +206,43 @@ const EmbeddingGraph: React.FC = () => {
     }
   };
 
-  /**
-   * 8. Refresh the entire graph (clears session data & state)
-   */
+  // 10) Refresh entire graph
   const handleRefresh = () => {
     sessionStorage.removeItem("allEmbeddings");
     sessionStorage.removeItem("graphData");
     sessionStorage.removeItem("camera");
-    
     setAllEmbeddings([]);
     setGraphData({ nodes: [], links: [] });
     setCursor(null);
     setLimit(INITIAL_LIMIT);
+    setCursorHistory([null]);
   };
 
-  /**
-   * 9. Conditionals for different states
-   */
-  if (isLoading && allEmbeddings.length === 0) {
+  // 11) Loading/Empty states
+  if ((isLoading || !data) && allEmbeddings.length === 0) {
     return <div>Loading...</div>;
   }
-
-  if (!isLoading && allEmbeddings.length === 0) {
+  if (!isLoading && data && data.chunks.length === 0 && allEmbeddings.length === 0) {
     return <div>No embeddings available.</div>;
   }
 
-  /**
-   * 10. Render the ForceGraph + Controls
-   */
+  // 12) Render ForceGraph2D
   return (
     <div className="w-full h-full">
       <ForceGraph2D
         ref={graphRef}
         graphData={graphData}
         nodeLabel="label"
-        // nodeAutoColorBy will color each node by the value in `node.group`
+        linkLabel="relationship" // Show relationship on hover
         nodeAutoColorBy="group"
         linkWidth={(link) => link.similarity * linkStrength}
         linkDirectionalParticles={1}
         linkDirectionalParticleWidth={(link) => link.similarity * linkStrength}
-        backgroundColor="gray-50"
-        // For performance, we skip drawing node text on the canvas
+        backgroundColor="#f9fafb"
+        onEngineStop={handleEngineStop}
+        width={1180}
+        height={620}
+        // For performance, only draw circles for nodes.
         nodeCanvasObject={(node, ctx, globalScale) => {
           const fontSize = 12 / globalScale;
           ctx.font = `${fontSize}px Sans-Serif`;
@@ -241,16 +250,8 @@ const EmbeddingGraph: React.FC = () => {
           ctx.beginPath();
           ctx.arc(node.x!, node.y!, 8, 0, 2 * Math.PI, false);
           ctx.fill();
-          // If you'd like to see text on each node, uncomment lines below:
-          // const label = node.label || "";
-          // ctx.fillStyle = "black";
-          // ctx.fillText(label, node.x! + 6, node.y! + 3);
         }}
-        onEngineStop={handleEngineStop}
-        width={1180}
-        height={620}
       />
-      {/* Buttons row */}
       <div className="border-t flex space-x-2 mt-4">
         <Button
           variant="outline"
