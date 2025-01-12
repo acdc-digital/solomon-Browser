@@ -9,13 +9,13 @@ interface EditorState {
   activeView: "editor" | "files" | "preview" | "users";
   activeComponent: "Admin" | "Files" | "Projects" | "Docs" | "Users";
   selectedFile: DocumentData | null;
-  projectId: Id<"projects"> | null;
+  projectId: Id<"projects"> | string | null; // Allow a special string identifier like "graph-chat"
   pendingFiles: DocumentData[];
   sortOrder: 'asc' | 'desc'; // New state for sort order
   setActiveView: (view: "editor" | "files" | "preview" | "users") => void;
   setActiveComponent: (component: "Admin" | "Files" | "Projects" | "Docs" | "Users") => void;
   setSelectedFile: (file: DocumentData | null) => void;
-  setProjectId: (id: Id<"projects"> | null) => void;
+  setProjectId: (id: Id<"projects"> | string | null) => void;
   addPendingFile: (file: DocumentData) => void;
   removePendingFile: (fileId: string) => void;
   toggleSortOrder: () => void; // New method to toggle sort order

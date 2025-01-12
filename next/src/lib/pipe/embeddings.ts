@@ -5,39 +5,62 @@ import { OpenAIEmbeddings } from "@langchain/openai";
 import pLimit from "p-limit";
 
 // Import your local utilities:
-import { retryWithBackoff } from "./utils"; // ← Adjust path if needed
-import convex from "@/lib/convexClient";    // ← Adjust path if needed
+import { retryWithBackoff } from "./utils";
+import convex from "@/lib/convexClient";
 
 /**
  * Interface representing each chunk of text to be embedded.
- * Adjust or expand fields to match how your code tracks chunks.
+ * Extend this with the metadata fields you wish to incorporate.
  */
 export interface DocChunk {
-  pageContent: string;
-  uniqueChunkId: string;
-  // Add whatever other fields you need (e.g. snippet, metadata, etc.)
+  pageContent: string;    // The main text of the chunk
+  uniqueChunkId: string;  // A UUID or other unique identifier
+
+  // Optional metadata where additional fields can reside
+  metadata?: {
+    // You can add doc-level or chunk-level fields like snippet, headings, etc.
+    keywords?: string[];
+    entities?: string[];
+    topics?: string[];
+  };
 }
 
 /**
  * Generate embeddings for an array of text chunks using OpenAI.
  * Retries with exponential backoff in case of rate limits or transient errors.
  *
- * @param docChunks  Array of chunk objects (must have `pageContent`).
- * @param openAIApiKey  Your OpenAI API key.
- * @param modelName  The OpenAI model name for embeddings (e.g., "text-embedding-ada-002").
- * @param retries  How many times to retry if an error occurs.
- * @param initialDelay  The initial backoff delay in ms (doubles each retry).
- * @returns An array of embeddings, each corresponding to docChunks[i].
+ * @param docChunks      Array of chunk objects (must have `pageContent`, optionally `metadata`).
+ * @param openAIApiKey   Your OpenAI API key.
+ * @param modelName      The OpenAI model name for embeddings (e.g., "text-embedding-ada-002").
+ * @param retries        How many times to retry if an error occurs.
+ * @param initialDelay   The initial backoff delay in ms (doubles each retry).
+ * @returns              An array of embeddings, each corresponding to docChunks[i].
  */
 export async function generateEmbeddingsForChunks(
   docChunks: DocChunk[],
   openAIApiKey: string,
-  modelName: string = "text-embedding-ada-002",
+  modelName: string = "text-embedding-3-small",
   retries: number = 5,
   initialDelay: number = 1000
 ): Promise<number[][]> {
-  // Extract just the text from each chunk
-  const texts = docChunks.map((c) => c.pageContent);
+  // Construct the strings to embed by concatenating chunk text + metadata.
+  const texts = docChunks.map((chunk) => {
+    const { pageContent, metadata } = chunk;
+    let metaStr = "";
+
+    if (metadata?.keywords?.length) {
+      metaStr += `\nKeywords: ${metadata.keywords.join(", ")}`;
+    }
+    if (metadata?.entities?.length) {
+      metaStr += `\nEntities: ${metadata.entities.join(", ")}`;
+    }
+    if (metadata?.topics?.length) {
+      metaStr += `\nTopics: ${metadata.topics.join(", ")}`;
+    }
+
+    // Combine the core pageContent with any meta string
+    return `${pageContent}\n${metaStr}`;
+  });
 
   // Initialize the embeddings class
   const openAIEmbeddings = new OpenAIEmbeddings({
@@ -59,17 +82,17 @@ export async function generateEmbeddingsForChunks(
  * Update chunk embeddings in the database (Convex) in batches, with optional concurrency.
  * Each embedding is matched to the correct chunk via `uniqueChunkId`.
  *
- * @param docChunks  The same chunks you passed to generateEmbeddingsForChunks()
- * @param chunkEmbeddings  The array of embeddings from generateEmbeddingsForChunks()
+ * @param docChunks         The same chunks you passed to generateEmbeddingsForChunks()
+ * @param chunkEmbeddings   The array of embeddings from generateEmbeddingsForChunks()
  * @param concurrencyLimit  How many updates to run in parallel (default 1).
- * @param batchSize  How many embeddings to process per "batch" (default 250).
- * @param retries  Number of retry attempts for each item in case of transient DB errors.
- * @param initialDelay  Initial backoff delay in ms for each item’s retry sequence.
+ * @param batchSize         How many embeddings to process per "batch" (default 250).
+ * @param retries           Number of retry attempts for each item in case of transient DB errors.
+ * @param initialDelay      Initial backoff delay in ms for each item’s retry sequence.
  */
 export async function updateEmbeddingsInDB(
   docChunks: DocChunk[],
   chunkEmbeddings: number[][],
-  concurrencyLimit: number = 1,
+  concurrencyLimit: number = 2, // using 2 as per your snippet
   batchSize: number = 250,
   retries: number = 5,
   initialDelay: number = 1000

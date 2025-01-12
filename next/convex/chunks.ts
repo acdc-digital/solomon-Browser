@@ -16,16 +16,19 @@ interface ChunkDoc {
     docAuthor?: string;
     docTitle?: string;
     headings?: string[];
+    isHeading?: boolean;
     pageNumber?: number;
     numTokens?: number;
     snippet?: string;
-    module?: string; // Added 'module' field
+    module?: string;
+    keywords?: string[];
+    entities?: string[];
+    topics?: string[];
   };
-  embedding?: number[]; // Ensure embedding is optional
+  embedding?: number[];
   chunkNumber?: number;
 }
 
-// Define the shape of the data to be returned
 interface EmbeddingChunk {
   id: string;
   pageContent: string;
@@ -44,46 +47,54 @@ export const getAllEmbeddings = query(async (
   ctx,
   { limit, cursor }: { limit: number; cursor?: string | null }
 ): Promise<{ chunks: EmbeddingChunk[]; nextCursor: string | null }> => {
-  // Initialize the query using the 'by_uniqueChunkId' index for ordering
   let q = ctx.db.query("chunks")
-    .withIndex("by_uniqueChunkId") // Use the specified index
-    .order("asc"); // Order by 'uniqueChunkId' in ascending order
+    .withIndex("by_uniqueChunkId")
+    .order("asc");
 
-  // If a cursor is provided, filter to items after the cursor
   if (cursor) {
-    q = q.filter(c => c.gt("uniqueChunkId", cursor)); // Apply filter for cursor-based pagination
+    q = q.filter(c => c.gt("uniqueChunkId", cursor));
   }
-
-  // Filter out chunks without embeddings
+  // Only return chunks that actually have embeddings
   q = q.filter(c => c.neq("embedding", null));
 
-  // Apply the limit
-  const chunks = await q.take(limit); // Removed .collect()
-
-  // Determine the next cursor
-  const nextCursor = chunks.length === limit ? chunks[chunks.length - 1].uniqueChunkId : null;
+  const chunks = await q.take(limit);
+  const nextCursor = (chunks.length === limit)
+    ? chunks[chunks.length - 1].uniqueChunkId
+    : null;
 
   return {
     chunks: chunks.map((chunk: ChunkDoc) => ({
       id: chunk.uniqueChunkId,
       pageContent: chunk.pageContent,
-      embedding: chunk.embedding as number[], // Ensure embedding is defined
+      embedding: chunk.embedding as number[],
+
+      // Return all the metadata fields you care about:
       metadata: {
-        snippet: chunk.metadata?.snippet || 'No snippet available', // Map snippet
-        module: chunk.metadata?.module || null, // Ensure 'module' exists in metadata
+        snippet: chunk.metadata?.snippet ?? "No snippet available",
+        module: chunk.metadata?.module ?? null,
+
+        // Add these lines so you actually receive them on the client:
+        docAuthor: chunk.metadata?.docAuthor ?? "Unknown",
+        docTitle: chunk.metadata?.docTitle ?? "Untitled",
+        headings: chunk.metadata?.headings ?? [],
+        isHeading: chunk.metadata?.isHeading ?? false,
+        pageNumber: chunk.metadata?.pageNumber ?? 0,
+        numTokens: chunk.metadata?.numTokens ?? 0,
+        keywords: chunk.metadata?.keywords ?? [],
+        entities: chunk.metadata?.entities ?? [],
+        topics: chunk.metadata?.topics ?? [],
       },
     })),
     nextCursor,
   };
 });
 
-// Mutation to insert a single chunk
 export const insertChunk = mutation({
   args: {
     parentProjectId: v.id("projects"),
     pageContent: v.string(),
-    metadata: v.optional(v.object({})), // Allow any object
-    chunkNumber: v.optional(v.number()), // Optional
+    metadata: v.optional(v.object({})), // Freed to accept any shape
+    chunkNumber: v.optional(v.number()),
   },
   handler: async (
     ctx,
@@ -94,14 +105,14 @@ export const insertChunk = mutation({
       chunkNumber?: number;
     }
   ) => {
-    const uniqueChunkId = uuidv4(); // Generate UUID server-side
+    const uniqueChunkId = uuidv4();
 
     await ctx.db.insert("chunks", {
       projectId: parentProjectId,
-      uniqueChunkId, // Use the generated UUID
+      uniqueChunkId,
       pageContent,
       metadata: metadata || {},
-      chunkNumber: chunkNumber ?? undefined, // Optional
+      chunkNumber: chunkNumber ?? undefined,
     });
   },
 });
@@ -112,20 +123,24 @@ export const insertChunks = mutation({
     parentProjectId: v.id("projects"),
     chunks: v.array(
       v.object({
-        uniqueChunkId: v.string(), // Accept UUID for each chunk
+        uniqueChunkId: v.string(),
         pageContent: v.string(),
         metadata: v.optional(
           v.object({
             docAuthor: v.optional(v.string()),
             docTitle: v.optional(v.string()),
             headings: v.optional(v.array(v.string())),
+            isHeading: v.optional(v.boolean()), // <-- ADDED here
             pageNumber: v.optional(v.number()),
             numTokens: v.optional(v.number()),
             snippet: v.optional(v.string()),
-            module: v.optional(v.string()), // Added 'module' field
+            module: v.optional(v.string()),
+            keywords: v.optional(v.array(v.string())),
+            entities: v.optional(v.array(v.string())),
+            topics: v.optional(v.array(v.string())),
           })
         ),
-        embedding: v.optional(v.array(v.float64())), // Ensure embedding is optional
+        embedding: v.optional(v.array(v.float64())),
         chunkNumber: v.optional(v.number()),
       })
     ),
@@ -141,10 +156,14 @@ export const insertChunks = mutation({
           docAuthor?: string;
           docTitle?: string;
           headings?: string[];
+          isHeading?: boolean;
           pageNumber?: number;
           numTokens?: number;
           snippet?: string;
           module?: string;
+          keywords?: string[];
+          entities?: string[];
+          topics?: string[];
         };
         embedding?: number[];
         chunkNumber?: number;
@@ -153,30 +172,26 @@ export const insertChunks = mutation({
   ) => {
     const chunkDocs: ChunkDoc[] = chunks.map(chunk => ({
       projectId: parentProjectId,
-      uniqueChunkId: chunk.uniqueChunkId, // Use the provided UUID
+      uniqueChunkId: chunk.uniqueChunkId,
       pageContent: chunk.pageContent,
       metadata: chunk.metadata || {},
-      embedding: chunk.embedding ?? undefined, // Optional
+      embedding: chunk.embedding ?? undefined,
       chunkNumber: chunk.chunkNumber ?? undefined,
     }));
 
-    // Define concurrency limit (e.g., 5 simultaneous inserts)
     const limit = pLimit(5);
 
-    // Create an array of insert promises with controlled concurrency
     const insertPromises = chunkDocs.map(chunkDoc =>
       limit(() => ctx.db.insert("chunks", chunkDoc))
     );
 
-    // Await all insert operations
     await Promise.all(insertPromises);
   },
 });
 
-// Mutation to update a chunk's embedding
 export const updateChunkEmbedding = mutation({
   args: {
-    uniqueChunkId: v.string(), // Use UUID to identify the chunk
+    uniqueChunkId: v.string(),
     embedding: v.array(v.float64()),
   },
   handler: async (

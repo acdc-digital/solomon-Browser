@@ -7,7 +7,14 @@ import React, { useState, useEffect, useRef } from "react";
 import { useAction, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { ArrowUp, Loader2 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeHighlight from "rehype-highlight";
 
+// Import the special graph chat constant from your ChatHeader module.
+import { GRAPH_CHAT_ID } from "./Chatheader";
+
+// Interfaces for chat messages.
 interface ChatEntry {
   _id: string;
   input: string;
@@ -15,32 +22,46 @@ interface ChatEntry {
 }
 
 interface PendingMessage {
-  id: string;      // local-only ID (e.g. "pending-1685647384")
-  input: string;   // user’s typed text
+  id: string;      // Local-only ID (e.g. "pending-1685647384")
+  input: string;   // User’s typed text
 }
 
-export default function Chat({ projectId }: { projectId: string }) {
-  // 1. Query official server messages
-  const entries = useQuery(api.chat.getAllEntries, { projectId });
+interface ChatProps {
+  projectId: string; // Either a regular project id or "graph-chat"
+}
 
-  // 2. Send user messages to the server
-  const handleUserAction = useAction(api.chat.handleUserAction);
+export default function Chat({ projectId }: ChatProps) {
+  // Determine if we're in graph-chat mode.
+  const isGraphChat = projectId === GRAPH_CHAT_ID;
 
-  // 3. Local states
+  // 1. Query messages.
+  // If graph chat, use our dedicated graph chat query (which does not require a projectId parameter).
+  // Otherwise, use the project-specific query.
+  const entries = useQuery(
+    isGraphChat ? api.graphChat.getAllGraphChatEntries : api.chat.getAllEntries,
+    isGraphChat ? {} : { projectId }
+  );
+
+  // 2. Select the appropriate action/mutation for sending messages.
+  const handleUserAction = useAction(
+    isGraphChat ? api.graphChat.handleGraphUserAction : api.chat.handleUserAction
+  );
+
+  // 3. Local states.
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
 
-  // 4. Refs for scrolling & auto-resize
+  // 4. Refs for scrolling and auto-resize.
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Scroll to bottom whenever entries or pendingMessages change
+  // Scroll to bottom whenever messages or pending messages change.
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [entries, pendingMessages]);
 
-  // Auto-resize the <textarea> as you type
+  // Auto-resize the textarea as you type.
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -48,7 +69,7 @@ export default function Chat({ projectId }: { projectId: string }) {
     }
   }, [message]);
 
-  // 5. Handle user submission
+  // 5. Handle user submission.
   const onSubmit = async (msg: string) => {
     if (msg.trim() === "") return;
     setMessage("");
@@ -58,7 +79,12 @@ export default function Chat({ projectId }: { projectId: string }) {
     setPendingMessages((prev) => [...prev, { id: pendingId, input: msg }]);
 
     try {
-      await handleUserAction({ message: msg, projectId });
+      if (isGraphChat) {
+        // Graph chat does not require a projectId.
+        await handleUserAction({ message: msg });
+      } else {
+        await handleUserAction({ message: msg, projectId });
+      }
     } catch (error) {
       console.error("Error sending message:", error);
     } finally {
@@ -66,20 +92,15 @@ export default function Chat({ projectId }: { projectId: string }) {
     }
   };
 
-  // 6. Remove ephemeral messages once the server includes them
+  // 6. Remove ephemeral messages once the server includes them.
   useEffect(() => {
     if (!entries || entries.length === 0) return;
     setPendingMessages((prev) =>
-      prev.filter((pm) => {
-        const isReflectedOnServer = entries.some(
-          (entry) => entry.input === pm.input
-        );
-        return !isReflectedOnServer;
-      })
+      prev.filter((pm) => !entries.some((entry) => entry.input === pm.input))
     );
   }, [entries]);
 
-  // 7. Merge ephemeral + server messages
+  // 7. Merge pending and server messages.
   const mergedEntries: Array<ChatEntry | PendingMessage> = [
     ...(entries || []),
     ...pendingMessages,
@@ -91,32 +112,34 @@ export default function Chat({ projectId }: { projectId: string }) {
       <div className="flex-col rounded-xl h-[635px] border-black overflow-y-auto mt-2 mb-4 pr-2">
         {mergedEntries.map((entry) => {
           const isEphemeral = !("_id" in entry);
-
           return (
             <div
               key={isEphemeral ? entry.id : entry._id}
               className="flex flex-col gap-2 text-black p-2"
             >
               {/* "You:" label */}
-              <div className="text-sm items-end text-right text-gray-500">You:</div>
+              <div className="text-sm text-right text-gray-500">You:</div>
 
-              {/* User message in a light "cloud box" */}
+              {/* Display user message */}
               <div className="text-right">
                 <div className="inline-block bg-gray-100 text-black px-3 py-2 rounded-md text-left max-w-[85%] break-words">
                   {entry.input}
                 </div>
               </div>
 
-              {/* If ephemeral -> show small "Thinking..." placeholder
-                  If real entry -> show Solomon's response if present */}
+              {/* Display "Thinking..." for pending messages or show response */}
               {isEphemeral ? (
-                <div className="text-xs text-gray-500 ml-2 items-end text-right">(Thinking...)</div>
+                <div className="text-xs text-gray-500 ml-2 text-right">(Thinking...)</div>
               ) : (
                 "response" in entry &&
                 entry.response && (
                   <>
                     <div className="text-sm mt-2 text-gray-500">Solomon:</div>
-                    <div className="ml-2">{entry.response}</div>
+                    <div className="ml-2">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                        {entry.response}
+                      </ReactMarkdown>
+                    </div>
                   </>
                 )
               )}
@@ -139,28 +162,15 @@ export default function Chat({ projectId }: { projectId: string }) {
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               onSubmit(message);
             }
           }}
-          className="flex-1 form-input px-4 bg-gray-100 border border-black rounded-md
-                     focus:outline-none focus:ring-0 resize-none leading-normal"
+          className="flex-1 form-input px-4 bg-gray-100 border border-black rounded-md focus:outline-none focus:ring-0 resize-none leading-normal"
           placeholder="Type your message..."
           style={{ overflow: "auto", maxHeight: "200px" }}
         />
-
-        {/* <button
-          type="submit"
-          disabled={isLoading}
-          className="ml-2 px-3 bg-gray-700 text-white rounded-md hover:bg-gray-500 border-black"
-        >
-          {isLoading ? (
-            <Loader2 className="animate-spin" size={20} />
-          ) : (
-            <ArrowUp size={20} />
-          )}
-        </button> */} 
       </form>
     </div>
   );

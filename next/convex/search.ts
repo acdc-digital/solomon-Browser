@@ -173,7 +173,7 @@ export const combinedSearchChunks = action({
   },
 });
 
-/** Utility to remove duplicates by _id */
+/** Utility to remove duplicates by _id **/
 function deduplicateById(docs: SerializedChunk[]): SerializedChunk[] {
   const seen = new Set();
   const out: SerializedChunk[] = [];
