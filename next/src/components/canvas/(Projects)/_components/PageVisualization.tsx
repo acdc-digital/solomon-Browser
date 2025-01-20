@@ -12,7 +12,7 @@ interface PageVisualizationProps {
 
 const PageVisualization = ({
   pageSize,
-  pageMargin = '20px',
+  pageMargin = '15px',
   zoom,
   children,
 }: PageVisualizationProps) => {
@@ -44,7 +44,7 @@ const PageVisualization = ({
         }}
       >
         <div
-          className="editor-content-wrapper w-full h-full p-4 overflow-auto"
+          className="editor-content-wrapper w-full h-full"
         >
           {children}
         </div>
